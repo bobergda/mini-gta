@@ -28,6 +28,10 @@ const roadCenters = [];
 for (let n = world.block / 2; n < world.width; n += world.block) {
   roadCenters.push(n);
 }
+const sidewalkOffset = world.road / 2 + world.sidewalk / 2;
+const sidewalkGuides = roadCenters
+  .flatMap((center) => [center - sidewalkOffset, center + sidewalkOffset])
+  .sort((a, b) => a - b);
 
 const colors = ["#f97316", "#38bdf8", "#22c55e", "#eab308", "#ef4444", "#a78bfa"];
 
@@ -54,17 +58,24 @@ const pickups = [];
 const debris = [];
 
 function createPedestrian(x, y) {
+  const route = createPedRoute(x, y);
   return {
-    x,
-    y,
+    x: route.x,
+    y: route.y,
     vx: 0,
     vy: 0,
     radius: 9,
     tone: `hsl(${Math.floor(rand(10, 360))} 70% 72%)`,
     shirt: `hsl(${Math.floor(rand(0, 360))} 70% 55%)`,
-    heading: rand(-Math.PI, Math.PI),
-    timer: rand(0.2, 2.8),
+    heading: route.heading,
+    axis: route.axis,
+    line: route.line,
+    dir: route.dir,
+    targetX: route.targetX,
+    targetY: route.targetY,
+    baseSpeed: rand(28, 44),
     panic: 0,
+    panicHeading: route.heading,
     alive: true,
   };
 }
@@ -110,6 +121,19 @@ function nearestRoadCenter(value) {
   return best;
 }
 
+function nearestSidewalkGuide(value) {
+  let best = sidewalkGuides[0];
+  let bestDist = Infinity;
+  for (const guide of sidewalkGuides) {
+    const delta = Math.abs(guide - value);
+    if (delta < bestDist) {
+      best = guide;
+      bestDist = delta;
+    }
+  }
+  return best;
+}
+
 function isOnRoad(x, y) {
   return (
     roadCenters.some((center) => Math.abs(x - center) < world.road / 2) ||
@@ -118,12 +142,134 @@ function isOnRoad(x, y) {
 }
 
 function randomSidewalkSpot() {
-  const center = roadCenters[Math.floor(rand(0, roadCenters.length))];
+  const line = sidewalkGuides[Math.floor(rand(0, sidewalkGuides.length))];
   const vertical = Math.random() > 0.5;
-  const offset = world.road / 2 + world.sidewalk / 2 + rand(-10, 10);
   return vertical
-    ? { x: center + (Math.random() > 0.5 ? offset : -offset), y: rand(80, world.height - 80) }
-    : { x: rand(80, world.width - 80), y: center + (Math.random() > 0.5 ? offset : -offset) };
+    ? { x: line, y: rand(80, world.height - 80) }
+    : { x: rand(80, world.width - 80), y: line };
+}
+
+function nextGuide(value, dir) {
+  if (dir >= 0) {
+    for (const guide of sidewalkGuides) {
+      if (guide > value + 10) return guide;
+    }
+  } else {
+    for (let i = sidewalkGuides.length - 1; i >= 0; i--) {
+      if (sidewalkGuides[i] < value - 10) return sidewalkGuides[i];
+    }
+  }
+  return null;
+}
+
+function createPedRoute(x, y, preferredAxis = null) {
+  const verticalLine = nearestSidewalkGuide(x);
+  const horizontalLine = nearestSidewalkGuide(y);
+  const verticalDistance = Math.abs(x - verticalLine);
+  const horizontalDistance = Math.abs(y - horizontalLine);
+  const axis = preferredAxis || (verticalDistance < horizontalDistance ? "y" : "x");
+  const dir = Math.random() > 0.5 ? 1 : -1;
+
+  if (axis === "x") {
+    const line = horizontalLine;
+    const routeX = nextGuide(x, dir) ?? nextGuide(x, -dir) ?? x;
+    return {
+      x,
+      y: line,
+      axis,
+      line,
+      dir: routeX >= x ? 1 : -1,
+      targetX: routeX,
+      targetY: line,
+      heading: routeX >= x ? 0 : Math.PI,
+    };
+  }
+
+  const line = verticalLine;
+  const routeY = nextGuide(y, dir) ?? nextGuide(y, -dir) ?? y;
+  return {
+    x: line,
+    y,
+    axis,
+    line,
+    dir: routeY >= y ? 1 : -1,
+    targetX: line,
+    targetY: routeY,
+    heading: routeY >= y ? Math.PI / 2 : -Math.PI / 2,
+  };
+}
+
+function pickPedTarget(ped, allowTurn = true) {
+  const turnChance = allowTurn ? 0.26 : 0;
+
+  if (ped.axis === "x") {
+    ped.y = ped.line;
+    if (Math.random() < 0.14) ped.dir *= -1;
+
+    if (Math.random() < turnChance) {
+      ped.axis = "y";
+      ped.line = nearestSidewalkGuide(ped.x);
+      ped.x = ped.line;
+      ped.dir = Math.random() > 0.5 ? 1 : -1;
+      const targetY = nextGuide(ped.y, ped.dir) ?? nextGuide(ped.y, -ped.dir) ?? ped.y;
+      ped.dir = targetY >= ped.y ? 1 : -1;
+      ped.targetX = ped.line;
+      ped.targetY = targetY;
+      return;
+    }
+
+    const targetX = nextGuide(ped.x, ped.dir) ?? nextGuide(ped.x, -ped.dir);
+    if (targetX == null) {
+      ped.dir *= -1;
+      ped.targetX = ped.x;
+      ped.targetY = ped.line;
+      return;
+    }
+    ped.dir = targetX >= ped.x ? 1 : -1;
+    ped.targetX = targetX;
+    ped.targetY = ped.line;
+    return;
+  }
+
+  ped.x = ped.line;
+  if (Math.random() < 0.14) ped.dir *= -1;
+
+  if (Math.random() < turnChance) {
+    ped.axis = "x";
+    ped.line = nearestSidewalkGuide(ped.y);
+    ped.y = ped.line;
+    ped.dir = Math.random() > 0.5 ? 1 : -1;
+    const targetX = nextGuide(ped.x, ped.dir) ?? nextGuide(ped.x, -ped.dir) ?? ped.x;
+    ped.dir = targetX >= ped.x ? 1 : -1;
+    ped.targetX = targetX;
+    ped.targetY = ped.line;
+    return;
+  }
+
+  const targetY = nextGuide(ped.y, ped.dir) ?? nextGuide(ped.y, -ped.dir);
+  if (targetY == null) {
+    ped.dir *= -1;
+    ped.targetX = ped.line;
+    ped.targetY = ped.y;
+    return;
+  }
+  ped.dir = targetY >= ped.y ? 1 : -1;
+  ped.targetX = ped.line;
+  ped.targetY = targetY;
+}
+
+function resetPedToSidewalk(ped, preferredAxis = null) {
+  const route = createPedRoute(ped.x, ped.y, preferredAxis);
+  ped.x = route.x;
+  ped.y = route.y;
+  ped.axis = route.axis;
+  ped.line = route.line;
+  ped.dir = route.dir;
+  ped.targetX = route.targetX;
+  ped.targetY = route.targetY;
+  ped.heading = route.heading;
+  ped.vx = 0;
+  ped.vy = 0;
 }
 
 function spawnWorld() {
@@ -330,34 +476,86 @@ function updateAICar(car, dt, pursuitTarget) {
 function updatePedestrians(dt) {
   for (const ped of pedestrians) {
     if (!ped.alive) continue;
+    const wasPanicking = ped.panic > 0;
 
     const closeThreat = [...cars, ...policeCars, ...(player.vehicle ? [] : [player])]
       .filter(Boolean)
-      .find((entity) => dist(ped, entity) < 70 && (entity.speed || player.speed) > 30);
+      .find((entity) => dist(ped, entity) < 90 && (entity.speed || player.speed) > 35);
 
     if (closeThreat) {
-      ped.panic = 1.4;
-      ped.heading = Math.atan2(ped.y - closeThreat.y, ped.x - closeThreat.x);
+      ped.panic = 1.2;
+      ped.panicHeading = Math.atan2(ped.y - closeThreat.y, ped.x - closeThreat.x);
     }
 
-    ped.timer -= dt;
     ped.panic = Math.max(0, ped.panic - dt);
-    if (ped.timer <= 0) {
-      ped.timer = rand(0.7, 2.8);
-      ped.heading += rand(-1.2, 1.2);
-    }
+    if (ped.panic > 0) {
+      const jitter = Math.sin((ped.x + ped.y) * 0.05 + ped.panic * 10) * 0.28;
+      const heading = ped.panicHeading + jitter;
+      const moveSpeed = 110;
+      ped.heading = heading;
+      ped.vx = Math.cos(heading) * moveSpeed;
+      ped.vy = Math.sin(heading) * moveSpeed;
+      ped.x += ped.vx * dt;
+      ped.y += ped.vy * dt;
+    } else {
+      if (ped.axis === "x") {
+        ped.y = lerp(ped.y, ped.line, dt * 10);
+      } else {
+        ped.x = lerp(ped.x, ped.line, dt * 10);
+      }
 
-    const moveSpeed = ped.panic > 0 ? 95 : 42;
-    ped.vx = Math.cos(ped.heading) * moveSpeed;
-    ped.vy = Math.sin(ped.heading) * moveSpeed;
-    ped.x += ped.vx * dt;
-    ped.y += ped.vy * dt;
+      const toTargetX = ped.targetX - ped.x;
+      const toTargetY = ped.targetY - ped.y;
+      const distanceToTarget = Math.hypot(toTargetX, toTargetY);
+
+      if (distanceToTarget < 8) {
+        ped.x = ped.targetX;
+        ped.y = ped.targetY;
+        pickPedTarget(ped, true);
+      }
+
+      const desiredX = ped.targetX - ped.x;
+      const desiredY = ped.targetY - ped.y;
+      const desiredHeading = Math.atan2(desiredY, desiredX);
+      const desiredSpeed = ped.baseSpeed;
+
+      let avoidX = 0;
+      let avoidY = 0;
+      for (const other of pedestrians) {
+        if (other === ped || !other.alive) continue;
+        const gap = dist(ped, other);
+        if (gap > 0 && gap < 18) {
+          avoidX += (ped.x - other.x) / gap;
+          avoidY += (ped.y - other.y) / gap;
+        }
+      }
+
+      const blendedX = desiredX + avoidX * 10;
+      const blendedY = desiredY + avoidY * 10;
+      if (Math.abs(blendedX) > 0.001 || Math.abs(blendedY) > 0.001) {
+        ped.heading = Math.atan2(blendedY, blendedX);
+      } else if (Math.abs(desiredX) > 0.001 || Math.abs(desiredY) > 0.001) {
+        ped.heading = desiredHeading;
+      }
+      ped.vx = lerp(ped.vx, Math.cos(ped.heading) * desiredSpeed, dt * 6);
+      ped.vy = lerp(ped.vy, Math.sin(ped.heading) * desiredSpeed, dt * 6);
+      ped.x += ped.vx * dt;
+      ped.y += ped.vy * dt;
+    }
 
     ped.x = clamp(ped.x, 40, world.width - 40);
     ped.y = clamp(ped.y, 40, world.height - 40);
 
-    if (!isOnRoad(ped.x, ped.y)) {
-      ped.heading += rand(-0.7, 0.7);
+    if (ped.panic <= 0 && isOnRoad(ped.x, ped.y)) {
+      resetPedToSidewalk(ped, ped.axis);
+    }
+
+    if (ped.panic === 0 && (Math.abs(ped.vx) + Math.abs(ped.vy) < 8)) {
+      pickPedTarget(ped, false);
+    }
+
+    if (wasPanicking && ped.panic === 0) {
+      resetPedToSidewalk(ped);
     }
   }
 }
