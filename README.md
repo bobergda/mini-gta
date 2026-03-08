@@ -1,32 +1,48 @@
-# Mini GTA
+# Mini GTA 3D
 
-Prosty sandbox 2D w przeglądarce, inspirowany klasycznym GTA z widokiem z góry.
+Przeglądarkowy sandbox 3D zbudowany w `Three.js` i `Vite`. Miasto, ruch pieszy, auta, pickupy, wanted level i policyjny pościg są generowane proceduralnie w stylistyce low-poly.
 
 ## Uruchomienie
 
-Otwórz plik `index.html` w przeglądarce.
-
-Jeśli wolisz lokalny serwer:
-
 ```bash
-python3 -m http.server 8000
+npm install
+npm run dev
 ```
 
-Potem wejdź na `http://localhost:8000`.
+Domyślny adres deweloperski:
+
+```text
+http://localhost:5173
+```
+
+Build produkcyjny:
+
+```bash
+npm run build
+```
+
+Testy jednostkowe:
+
+```bash
+npm run test
+```
 
 ## Sterowanie
 
-- `WASD` lub strzałki: ruch / jazda
-- `Shift`: sprint
-- `E`: wejdź do auta / wyjdź z auta
+- `WASD`: ruch / jazda
+- `Shift`: sprint pieszo
+- `E`: wejście do auta / wyjście z auta
 - `Spacja`: hamulec ręczny
+- przeciągnięcie myszą po scenie: obrót kamery
+- kółko myszy: zoom kamery
 
-## Co działa
+## Co działa w v1
 
-- chodzenie po mieście
-- kradzież aut
-- jazda po siatce ulic
-- NPC na chodnikach
-- paczki z gotówką do zebrania
-- system pościgu i radiowozy
-- pasek stanu i game over
+- third-person kamera dla pieszego i auta
+- proceduralne miasto 3D low-poly
+- chodzenie po mieście i kradzież aut
+- ruch uliczny po pasach i skrzyżowaniach
+- piesi poruszający się po chodnikach
+- pickupy z gotówką
+- wanted level i spawn policji
+- podstawowe kolizje i game over

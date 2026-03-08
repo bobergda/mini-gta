@@ -3,58 +3,61 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mini GTA</title>
-    <link rel="stylesheet" href="./style.css" />
+    <title>Mini GTA 3D</title>
+    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <div class="shell">
+    <div class="shell" id="shell">
       <header class="hud-bar">
         <div>
-          <p class="eyebrow">ULICZNY SANDBOX</p>
-          <h1>Mini GTA</h1>
+          <p class="eyebrow">LOW POLY STREET SANDBOX</p>
+          <h1>Mini GTA 3D</h1>
         </div>
         <div class="stats">
           <div class="panel">
             <span>Ruch</span>
-            <strong>WASD / strzałki</strong>
+            <strong>WASD / Shift / E</strong>
           </div>
           <div class="panel">
-            <span>Akcja</span>
-            <strong>E, Shift, Spacja</strong>
+            <span>Kamera</span>
+            <strong>Mysz + kółko</strong>
           </div>
         </div>
       </header>
 
       <main class="game-wrap">
-        <canvas id="game" width="1280" height="720"></canvas>
+        <div id="game-root" class="game-root" aria-label="Mini GTA 3D"></div>
 
         <aside class="overlay left">
           <div class="card">
             <h2>Cel</h2>
             <p id="objective">
-              Ukradnij dowolne auto, unikaj radiowozów i utrzymaj się przy życiu.
+              Ukradnij auto, zbieraj paczki i utrzymaj się przy życiu podczas pościgu.
             </p>
           </div>
           <div class="card">
             <h2>Sterowanie</h2>
+            <p>WASD: ruch / jazda</p>
             <p>Shift: sprint</p>
             <p>E: wsiądź / wysiądź</p>
-            <p>Spacja: hamulec ręczny</p>
+            <p>Spacja: ręczny</p>
+            <p>Mysz: obrót kamery</p>
+            <p>Kółko: zoom</p>
           </div>
         </aside>
 
         <aside class="overlay right">
           <div class="card compact">
             <h2>Status</h2>
-            <p id="statusLine">Spacer po mieście</p>
+            <p id="statusLine">Ładowanie miasta</p>
             <p id="cashLine">Gotówka: $0</p>
-            <p id="wantedLine">Poziom pościgu: 0</p>
+            <p id="wantedLine">Pościg: ☆☆☆☆☆</p>
             <p id="healthLine">Zdrowie: 100</p>
           </div>
         </aside>
       </main>
     </div>
 
-    <script src="./game.js"></script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
