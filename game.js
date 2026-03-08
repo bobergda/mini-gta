@@ -70,11 +70,14 @@ function createPedestrian(x, y) {
 }
 
 function createCar(x, y, angle, opts = {}) {
+  const speed = opts.speed || 0;
   return {
     x,
     y,
     angle,
-    speed: opts.speed || 0,
+    speed,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
     width: 26,
     height: 46,
     color: opts.color || colors[Math.floor(rand(0, colors.length))],
@@ -112,14 +115,6 @@ function isOnRoad(x, y) {
     roadCenters.some((center) => Math.abs(x - center) < world.road / 2) ||
     roadCenters.some((center) => Math.abs(y - center) < world.road / 2)
   );
-}
-
-function randomStreetSpot() {
-  const center = roadCenters[Math.floor(rand(0, roadCenters.length))];
-  const vertical = Math.random() > 0.5;
-  return vertical
-    ? { x: center + rand(-world.road / 2 + 18, world.road / 2 - 18), y: rand(80, world.height - 80) }
-    : { x: rand(80, world.width - 80), y: center + rand(-world.road / 2 + 18, world.road / 2 - 18) };
 }
 
 function randomSidewalkSpot() {
@@ -211,6 +206,31 @@ function getPlayerPosition() {
   return player.vehicle || player;
 }
 
+function getForwardVector(angle) {
+  return { x: Math.cos(angle), y: Math.sin(angle) };
+}
+
+function getRightVector(angle) {
+  return { x: -Math.sin(angle), y: Math.cos(angle) };
+}
+
+function getCarLocalVelocity(car) {
+  const forward = getForwardVector(car.angle);
+  const right = getRightVector(car.angle);
+  return {
+    forward: car.vx * forward.x + car.vy * forward.y,
+    lateral: car.vx * right.x + car.vy * right.y,
+  };
+}
+
+function setCarVelocity(car, forwardSpeed, lateralSpeed = 0) {
+  const forward = getForwardVector(car.angle);
+  const right = getRightVector(car.angle);
+  car.vx = forward.x * forwardSpeed + right.x * lateralSpeed;
+  car.vy = forward.y * forwardSpeed + right.y * lateralSpeed;
+  car.speed = forwardSpeed;
+}
+
 function updateOnFoot(dt) {
   const moveX = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const moveY = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
@@ -238,19 +258,29 @@ function updatePlayerCar(dt) {
 
   const throttle = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
   const steer = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
-  const friction = keys.has(" ") ? 2.8 : 1.1;
-  const accel = throttle * 250;
+  const braking = keys.has(" ");
+  const onRoad = isOnRoad(car.x, car.y);
+  const localVelocity = getCarLocalVelocity(car);
+  let forwardSpeed = localVelocity.forward;
+  let lateralSpeed = localVelocity.lateral;
 
-  car.speed += accel * dt;
-  car.speed = clamp(car.speed, -90, 300);
-  car.speed = lerp(car.speed, 0, dt * friction);
-  car.angle += steer * dt * clamp(car.speed / 90, -2.2, 2.2);
-  car.x += Math.cos(car.angle) * car.speed * dt;
-  car.y += Math.sin(car.angle) * car.speed * dt;
+  const driveForce = throttle > 0 ? 430 : throttle < 0 ? 260 : 0;
+  const turnGrip = onRoad ? 9.5 : 2.2;
+  const drag = braking ? 5.8 : onRoad ? 1.45 : 3.4;
+  const steerRate = braking ? 3.2 : 2.25;
 
-  if (!isOnRoad(car.x, car.y)) {
-    car.speed *= 0.985;
-  }
+  forwardSpeed += throttle * driveForce * dt;
+  forwardSpeed = clamp(forwardSpeed, -110, onRoad ? 320 : 230);
+  forwardSpeed = lerp(forwardSpeed, 0, dt * drag);
+  lateralSpeed = lerp(lateralSpeed, 0, dt * turnGrip);
+
+  const steeringWeight = clamp(Math.abs(forwardSpeed) / 75, 0, 1.6);
+  car.angle += steer * steerRate * steeringWeight * dt * (forwardSpeed >= 0 ? 1 : -0.65);
+
+  const carrySlip = onRoad ? 0.28 : 0.78;
+  setCarVelocity(car, forwardSpeed, lateralSpeed * carrySlip);
+  car.x += car.vx * dt;
+  car.y += car.vy * dt;
 
   car.x = clamp(car.x, 35, world.width - 35);
   car.y = clamp(car.y, 35, world.height - 35);
@@ -280,8 +310,9 @@ function updateAICar(car, dt, pursuitTarget) {
     car.speed = lerp(car.speed, clamp(car.speed || rand(40, 70), 40, 90), dt * 0.8);
   }
 
-  car.x += Math.cos(car.angle) * car.speed * dt;
-  car.y += Math.sin(car.angle) * car.speed * dt;
+  setCarVelocity(car, car.speed);
+  car.x += car.vx * dt;
+  car.y += car.vy * dt;
 
   if (car.x < 60 || car.x > world.width - 60 || car.y < 60 || car.y > world.height - 60) {
     car.angle += Math.PI;
@@ -554,7 +585,7 @@ function drawPedestrian(ped) {
   if (!ped.alive) return;
   ctx.save();
   ctx.translate(ped.x, ped.y);
-  ctx.rotate(ped.heading);
+  ctx.rotate(ped.heading + Math.PI / 2);
   ctx.fillStyle = ped.shirt;
   ctx.fillRect(-7, -6, 14, 16);
   ctx.fillStyle = ped.tone;
@@ -567,7 +598,7 @@ function drawPedestrian(ped) {
 function drawCar(car) {
   ctx.save();
   ctx.translate(car.x, car.y);
-  ctx.rotate(car.angle);
+  ctx.rotate(car.angle + Math.PI / 2);
   ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
   ctx.fillRect(-car.width / 2, -car.height / 2 + 4, car.width, car.height);
   ctx.fillStyle = car.police ? "#101828" : car.color;
@@ -586,7 +617,7 @@ function drawPlayer() {
   if (player.vehicle) return;
   ctx.save();
   ctx.translate(player.x, player.y);
-  ctx.rotate(player.angle);
+  ctx.rotate(player.angle + Math.PI / 2);
   ctx.fillStyle = player.invuln > 0 ? "#fca5a5" : "#f5d0fe";
   ctx.fillRect(-8, -6, 16, 18);
   ctx.fillStyle = "#fde68a";
