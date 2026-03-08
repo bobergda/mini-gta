@@ -29,7 +29,7 @@ npm run test
 
 ## Sterowanie
 
-- `WASD`: ruch / jazda
+- strzałki: ruch / jazda
 - `Shift`: sprint pieszo
 - `E`: wejście do auta / wyjście z auta
 - `Spacja`: hamulec ręczny

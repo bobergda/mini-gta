@@ -3,7 +3,6 @@ import {
   chooseTrafficTurn,
   getLaneCoord,
   headingFromAxis,
-  nearestValue,
   nextNode,
 } from "../world.js";
 
@@ -116,6 +115,7 @@ export function updateTrafficVehicle(vehicle, world, dt, rng = Math.random) {
 
   const targetSpeed = vehicle.ai === "police" ? 19 : 13.5;
   vehicle.speed = lerp(vehicle.speed, targetSpeed, dt * (vehicle.ai === "police" ? 2.4 : 1.2));
+  vehicle.heading = headingFromAxis(vehicle.axis, vehicle.dir);
   const velocity = composeVelocity(vehicle.heading, vehicle.speed);
   vehicle.vx = velocity.x;
   vehicle.vz = velocity.z;
@@ -145,7 +145,8 @@ export function updatePoliceVehicle(vehicle, world, target, dt, rng = Math.rando
   if (vehicle.disabled) return;
 
   vehicle.sirenPhase += dt * 12;
-  vehicle.speed = lerp(vehicle.speed, 21.5, dt * 2.7);
+  vehicle.speed = lerp(vehicle.speed, 19.5, dt * 2.2);
+  vehicle.heading = headingFromAxis(vehicle.axis, vehicle.dir);
   if (vehicle.axis === "x") {
     vehicle.z = lerp(vehicle.z, vehicle.lineCoord, dt * 9);
     vehicle.x += vehicle.dir * vehicle.speed * dt;
@@ -165,22 +166,11 @@ export function updatePoliceVehicle(vehicle, world, target, dt, rng = Math.rando
       setVehicleRoute(vehicle, route);
     }
   }
-
-  const desiredHeading = Math.atan2(target.z - vehicle.z, target.x - vehicle.x);
-  vehicle.heading = lerp(vehicle.heading, desiredHeading, dt * 1.1);
-  const snappedAxis = Math.abs(Math.cos(vehicle.heading)) > Math.abs(Math.sin(vehicle.heading)) ? "x" : "z";
-  if (snappedAxis !== vehicle.axis) {
-    vehicle.axis = snappedAxis;
-    vehicle.dir = snappedAxis === "x" ? (Math.cos(vehicle.heading) >= 0 ? 1 : -1) : Math.sin(vehicle.heading) >= 0 ? 1 : -1;
-    vehicle.roadCenter = snappedAxis === "x" ? nearestValue(world.roadCenters, vehicle.z) : nearestValue(world.roadCenters, vehicle.x);
-    vehicle.lineCoord = getLaneCoord(vehicle.axis, vehicle.roadCenter, vehicle.dir, world.laneOffset);
-    vehicle.targetCoord = nextNode(world.roadCenters, vehicle.axis === "x" ? vehicle.x : vehicle.z, vehicle.dir, world.streetEdge);
-  }
 }
 
 export function updatePlayerVehicle(vehicle, world, input, dt) {
-  const throttle = (input.isDown("w") ? 1 : 0) - (input.isDown("s") ? 1 : 0);
-  const steer = (input.isDown("d") ? 1 : 0) - (input.isDown("a") ? 1 : 0);
+  const throttle = (input.isAnyDown(["w", "arrowup"]) ? 1 : 0) - (input.isAnyDown(["s", "arrowdown"]) ? 1 : 0);
+  const steer = (input.isAnyDown(["d", "arrowright"]) ? 1 : 0) - (input.isAnyDown(["a", "arrowleft"]) ? 1 : 0);
   const braking = input.isDown(" ");
   const local = projectLocalVelocity(vehicle.heading, vehicle.vx, vehicle.vz);
 
@@ -188,15 +178,15 @@ export function updatePlayerVehicle(vehicle, world, input, dt) {
   let lateralSpeed = local.lateral;
   const onRoad = Math.abs(vehicle.z - nearestValue(world.roadCenters, vehicle.z)) < world.roadWidth * 0.6 || Math.abs(vehicle.x - nearestValue(world.roadCenters, vehicle.x)) < world.roadWidth * 0.6;
 
-  forwardSpeed += throttle * (throttle >= 0 ? 36 : 26) * dt;
-  forwardSpeed = Math.max(-12, Math.min(onRoad ? 32 : 24, forwardSpeed));
-  forwardSpeed = lerp(forwardSpeed, 0, dt * (braking ? 5.6 : onRoad ? 1.35 : 2.8));
-  lateralSpeed = lerp(lateralSpeed, 0, dt * (onRoad ? 10 : 3));
+  forwardSpeed += throttle * (throttle >= 0 ? 32 : 22) * dt;
+  forwardSpeed = Math.max(-10, Math.min(onRoad ? 28 : 20, forwardSpeed));
+  forwardSpeed = lerp(forwardSpeed, 0, dt * (braking ? 6.2 : onRoad ? 1.8 : 3.4));
+  lateralSpeed = lerp(lateralSpeed, 0, dt * (onRoad ? 12 : 4));
 
-  const turnRate = braking ? 2.8 : 2.1;
-  vehicle.heading += steer * turnRate * dt * Math.min(1.7, Math.abs(forwardSpeed) / 6) * (forwardSpeed >= 0 ? 1 : -0.65);
+  const turnRate = braking ? 2.4 : 1.8;
+  vehicle.heading += steer * turnRate * dt * Math.min(1.4, Math.abs(forwardSpeed) / 7) * (forwardSpeed >= 0 ? 1 : -0.55);
 
-  const velocity = composeVelocity(vehicle.heading, forwardSpeed, lateralSpeed * (onRoad ? 0.22 : 0.72));
+  const velocity = composeVelocity(vehicle.heading, forwardSpeed, lateralSpeed * (onRoad ? 0.14 : 0.4));
   vehicle.vx = velocity.x;
   vehicle.vz = velocity.z;
   vehicle.speed = forwardSpeed;

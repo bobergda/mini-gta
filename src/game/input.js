@@ -7,7 +7,7 @@ export function createInput(targetWindow, domElement) {
 
   targetWindow.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
-    if (["w", "a", "s", "d", "e", " ", "shift"].includes(key)) {
+    if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "e", " ", "shift"].includes(key)) {
       event.preventDefault();
     }
     if (!event.repeat) {
@@ -47,10 +47,21 @@ export function createInput(targetWindow, domElement) {
     isDown(key) {
       return keys.has(key);
     },
+    isAnyDown(keyList) {
+      return keyList.some((key) => keys.has(key));
+    },
     consumePress(key) {
       if (!pressed.has(key)) return false;
       pressed.delete(key);
       return true;
+    },
+    consumeAnyPress(keyList) {
+      for (const key of keyList) {
+        if (!pressed.has(key)) continue;
+        pressed.delete(key);
+        return true;
+      }
+      return false;
     },
     consumeLook() {
       const snapshot = { x: look.x, y: look.y };

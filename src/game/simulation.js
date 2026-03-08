@@ -104,8 +104,8 @@ function refillPickups(state, world, rng = Math.random) {
 }
 
 function updateOnFoot(player, input, cameraController, world, dt) {
-  const moveX = (input.isDown("d") ? 1 : 0) - (input.isDown("a") ? 1 : 0);
-  const moveZ = (input.isDown("s") ? 1 : 0) - (input.isDown("w") ? 1 : 0);
+  const moveX = (input.isAnyDown(["d", "arrowright"]) ? 1 : 0) - (input.isAnyDown(["a", "arrowleft"]) ? 1 : 0);
+  const moveZ = (input.isAnyDown(["s", "arrowdown"]) ? 1 : 0) - (input.isAnyDown(["w", "arrowup"]) ? 1 : 0);
   const sprint = input.isDown("shift");
 
   if (moveX === 0 && moveZ === 0) {
@@ -247,7 +247,7 @@ function handleCollisions(state, dt) {
       const b = state.vehicles[j];
       if (a.ai === "parked" && b.ai === "parked") continue;
       if (collideVehicles(a, b)) {
-        if (playerVehicle && (a.id === playerVehicle.id || b.id === playerVehicle.id)) {
+        if (playerVehicle && (a.id === playerVehicle.id || b.id === playerVehicle.id) && player.invuln <= 0) {
           player.health -= 8;
           player.invuln = 0.35;
         }
@@ -305,7 +305,7 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   if (state.gameOver) return;
 
   state.time += dt;
-  if (input.consumePress("e")) {
+  if (input.consumeAnyPress(["e"])) {
     tryToggleVehicle(state);
   }
 
