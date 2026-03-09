@@ -7,7 +7,7 @@ import {
   TRAFFIC_COUNT,
   VEHICLE_RADIUS,
 } from "./constants.js";
-import { clamp, distance2D, lerp } from "./math.js";
+import { cameraRelativeVector, clamp, distance2D, lerp } from "./math.js";
 import { createPedestrian, updatePedestrians } from "./systems/pedestrians.js";
 import {
   collideVehicles,
@@ -117,28 +117,26 @@ function updateOnFoot(player, input, cameraController, world, dt) {
   const moveX =
     (input.isAnyDown(["d", "arrowright"]) ? 1 : 0) -
     (input.isAnyDown(["a", "arrowleft"]) ? 1 : 0);
-  const moveZ =
-    (input.isAnyDown(["s", "arrowdown"]) ? 1 : 0) -
-    (input.isAnyDown(["w", "arrowup"]) ? 1 : 0);
+  const moveForward =
+    (input.isAnyDown(["w", "arrowup"]) ? 1 : 0) -
+    (input.isAnyDown(["s", "arrowdown"]) ? 1 : 0);
   const sprint = input.isDown("shift");
 
-  if (moveX === 0 && moveZ === 0) {
+  if (moveX === 0 && moveForward === 0) {
     player.vx = lerp(player.vx, 0, dt * 8);
     player.vz = lerp(player.vz, 0, dt * 8);
     player.speed = Math.hypot(player.vx, player.vz);
     return;
   }
 
-  const length = Math.hypot(moveX, moveZ) || 1;
+  const length = Math.hypot(moveX, moveForward) || 1;
   const localX = moveX / length;
-  const localZ = moveZ / length;
-  const yaw = cameraController.yaw;
-  const worldX = localX * Math.cos(yaw) - localZ * Math.sin(yaw);
-  const worldZ = localX * Math.sin(yaw) + localZ * Math.cos(yaw);
+  const localForward = moveForward / length;
+  const worldMove = cameraRelativeVector(localX, localForward, cameraController.yaw);
   const speed = sprint ? 12 : 7;
 
-  player.vx = lerp(player.vx, worldX * speed, dt * 10);
-  player.vz = lerp(player.vz, worldZ * speed, dt * 10);
+  player.vx = lerp(player.vx, worldMove.x * speed, dt * 10);
+  player.vz = lerp(player.vz, worldMove.z * speed, dt * 10);
   player.x += player.vx * dt;
   player.z += player.vz * dt;
   player.heading = Math.atan2(player.vz, player.vx);

@@ -16,6 +16,7 @@ export function updateCamera(controller, input, state, dt) {
   const wheel = input.consumeWheel();
   const hasManualLook = Math.abs(look.x) + Math.abs(look.y) > 0.001;
   const driving = state.player.mode === "vehicle";
+  const onFootMoving = !driving && state.player.speed > 0.35;
 
   controller.yaw -= look.x * 0.0035;
   controller.pitch = clamp(controller.pitch - look.y * 0.0025, 0.28, 1.08);
@@ -30,6 +31,10 @@ export function updateCamera(controller, input, state, dt) {
     controller.yaw = lerp(controller.yaw, state.player.heading - 0.18, dt * 2.4);
     controller.pitch = lerp(controller.pitch, 0.5, dt * 1.4);
     controller.distance = lerp(controller.distance, 13.5, dt * 1.15);
+  } else if (onFootMoving && controller.manualTimer === 0) {
+    controller.yaw = lerp(controller.yaw, state.player.heading, dt * 4.6);
+    controller.pitch = lerp(controller.pitch, 0.56, dt * 2.1);
+    controller.distance = lerp(controller.distance, 10.5, dt * 1.8);
   }
 
   controller.target.x = lerp(controller.target.x, target.x, dt * 7);

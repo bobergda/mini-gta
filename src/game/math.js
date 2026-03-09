@@ -4,6 +4,17 @@ export const angleWrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle))
 export const distance2D = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 export const sign = (value) => (value < 0 ? -1 : 1);
 
+export function cameraRelativeVector(moveRight, moveForward, yaw) {
+  const rightX = -Math.sin(yaw);
+  const rightZ = Math.cos(yaw);
+  const forwardX = Math.cos(yaw);
+  const forwardZ = Math.sin(yaw);
+  return {
+    x: rightX * moveRight + forwardX * moveForward,
+    z: rightZ * moveRight + forwardZ * moveForward,
+  };
+}
+
 export function vec2FromAngle(angle, length = 1) {
   return { x: Math.cos(angle) * length, z: Math.sin(angle) * length };
 }
