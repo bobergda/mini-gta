@@ -4,10 +4,24 @@ export function createInput(targetWindow, domElement) {
   const look = { x: 0, y: 0 };
   let wheel = 0;
   let dragging = false;
+  const blockedKeys = new Set([
+    "w",
+    "a",
+    "s",
+    "d",
+    "arrowup",
+    "arrowdown",
+    "arrowleft",
+    "arrowright",
+    "e",
+    "r",
+    " ",
+    "shift",
+  ]);
 
   targetWindow.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
-    if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "e", " ", "shift"].includes(key)) {
+    if (blockedKeys.has(key)) {
       event.preventDefault();
     }
     if (!event.repeat) {
@@ -20,8 +34,22 @@ export function createInput(targetWindow, domElement) {
     keys.delete(event.key.toLowerCase());
   });
 
-  domElement.addEventListener("pointerdown", () => {
+  targetWindow.addEventListener("blur", () => {
+    keys.clear();
+    pressed.clear();
+    dragging = false;
+  });
+
+  domElement.addEventListener("pointerdown", (event) => {
     dragging = true;
+    domElement.setPointerCapture?.(event.pointerId);
+  });
+
+  domElement.addEventListener("pointerup", (event) => {
+    dragging = false;
+    if (domElement.hasPointerCapture?.(event.pointerId)) {
+      domElement.releasePointerCapture(event.pointerId);
+    }
   });
 
   targetWindow.addEventListener("pointerup", () => {

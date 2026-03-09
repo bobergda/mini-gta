@@ -75,7 +75,10 @@
  *   roadWidth:number,
  *   sidewalkWidth:number,
  *   laneOffset:number,
- *   streetEdge:number
+ *   streetEdge:number,
+ *   districtName:string,
+ *   playerSpawn:{x:number,z:number,heading:number},
+ *   vehicleResetSpawn:{axis:"x"|"z",dir:1|-1,roadCenter:number,lineCoord:number,x:number,z:number,targetCoord:number,heading:number}
  * }} WorldState
  */
 

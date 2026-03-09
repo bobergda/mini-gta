@@ -1,6 +1,7 @@
 :root {
   --bg: #11141a;
   --panel: rgba(11, 16, 24, 0.78);
+  --panel-strong: rgba(9, 14, 20, 0.9);
   --panel-border: rgba(255, 255, 255, 0.12);
   --text: #fbf4e4;
   --muted: #c8baa1;
@@ -71,11 +72,16 @@ h1 {
 }
 
 .panel,
-.card {
-  background: var(--panel);
+.card,
+.start-card {
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(14px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.panel,
+.card {
+  background: var(--panel);
 }
 
 .panel {
@@ -120,6 +126,76 @@ h1 {
   outline: none;
 }
 
+.start-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 5;
+  background:
+    linear-gradient(140deg, rgba(8, 12, 18, 0.78), rgba(8, 12, 18, 0.38)),
+    radial-gradient(circle at 20% 18%, rgba(239, 91, 54, 0.4), transparent 34%);
+  backdrop-filter: blur(5px);
+  transition: opacity 220ms ease, visibility 220ms ease;
+}
+
+.start-overlay.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.start-card {
+  width: min(560px, 100%);
+  padding: 28px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(10, 14, 18, 0.96), rgba(24, 30, 37, 0.9));
+}
+
+.start-title {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: clamp(2.4rem, 7vw, 4.2rem);
+  line-height: 0.92;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.start-lede {
+  max-width: 46ch;
+  color: rgba(251, 244, 228, 0.82);
+  line-height: 1.55;
+  margin-bottom: 20px;
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 18px;
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.controls-grid span:nth-child(odd) {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+#startButton {
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 22px;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, var(--accent), #ea8f39);
+  color: #171717;
+  cursor: pointer;
+}
+
 .overlay {
   position: absolute;
   top: 18px;
@@ -158,6 +234,10 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 16px;
+}
+
+.telemetry p {
+  justify-content: flex-start;
 }
 
 #statusLine.dead,
@@ -210,6 +290,10 @@ h1 {
 
   .overlay {
     flex-direction: column;
+  }
+
+  .start-card {
+    padding: 24px;
   }
 
   .game-wrap {

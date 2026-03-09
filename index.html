@@ -16,11 +16,11 @@
         <div class="stats">
           <div class="panel">
             <span>Ruch</span>
-            <strong>Strzałki / Shift / E</strong>
+            <strong>Strzalki / Shift / E / R</strong>
           </div>
           <div class="panel">
             <span>Kamera</span>
-            <strong>Mysz + kółko</strong>
+            <strong>Mysz + kolko</strong>
           </div>
         </div>
       </header>
@@ -28,31 +28,60 @@
       <main class="game-wrap">
         <div id="game-root" class="game-root" aria-label="Mini GTA 3D"></div>
 
+        <section class="start-overlay" id="startOverlay">
+          <div class="start-card">
+            <p class="eyebrow">PROTOTYPE DISTRICT</p>
+            <h2 class="start-title" data-district-name>Harbor Heights</h2>
+            <p class="start-lede">
+              Przejmij auto, zbieraj paczki i utrzymaj przewage nad radiowozami
+              w proceduralnym miescie.
+            </p>
+            <div class="controls-grid">
+              <span>Strzalki / WASD</span><span>Ruch i jazda</span>
+              <span>Shift</span><span>Sprint pieszo</span>
+              <span>E</span><span>Wejscie i wyjscie z auta</span>
+              <span>Spacja</span><span>Hamulec reczny</span>
+              <span>R</span><span>Reset pozycji</span>
+              <span>Mysz / kolko</span><span>Obrot i zoom kamery</span>
+            </div>
+            <button type="button" id="startButton">Wjedz do dzielnicy</button>
+          </div>
+        </section>
+
         <aside class="overlay left">
           <div class="card">
             <h2>Cel</h2>
             <p id="objective">
-              Ukradnij auto, zbieraj paczki i utrzymaj się przy życiu podczas pościgu.
+              Ukradnij auto, zbieraj paczki i utrzymaj sie przy zyciu podczas
+              poscigu.
             </p>
           </div>
           <div class="card">
             <h2>Sterowanie</h2>
-            <p>Strzałki: ruch / jazda</p>
+            <p>Strzalki: ruch / jazda</p>
             <p>Shift: sprint</p>
-            <p>E: wsiądź / wysiądź</p>
-            <p>Spacja: ręczny</p>
-            <p>Mysz: obrót kamery</p>
-            <p>Kółko: zoom</p>
+            <p>E: wsiadz / wysiadz</p>
+            <p>Spacja: reczny</p>
+            <p>R: reset pozycji</p>
+            <p>Mysz: obrot kamery</p>
+            <p>Kolko: zoom</p>
           </div>
         </aside>
 
         <aside class="overlay right">
           <div class="card compact">
             <h2>Status</h2>
-            <p id="statusLine">Ładowanie miasta</p>
-            <p id="cashLine">Gotówka: $0</p>
-            <p id="wantedLine">Pościg: ☆☆☆☆☆</p>
+            <p id="statusLine">Ladowanie miasta</p>
+            <p id="cashLine">Gotowka: $0</p>
+            <p id="wantedLine">Poscig: -----</p>
             <p id="healthLine">Zdrowie: 100</p>
+          </div>
+          <div class="card compact telemetry">
+            <h2>Dzielnica</h2>
+            <p data-district-line>Harbor Heights</p>
+            <p data-speed-line>Predkosc: 0 km/h</p>
+            <p data-traffic-line>Ruch: 0</p>
+            <p data-fps-line>FPS: 0</p>
           </div>
         </aside>
       </main>

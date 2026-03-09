@@ -252,9 +252,36 @@ export function findPoliceSpawn(world, target, rng = Math.random) {
   };
 }
 
+function createPlayerSpawn(sidewalkGuides) {
+  return {
+    x: sidewalkGuides[3] ?? 0,
+    z: sidewalkGuides[2] ?? 0,
+    heading: 0,
+  };
+}
+
+function createVehicleResetSpawn(roadCenters, streetEdge, laneOffset) {
+  const axis = "x";
+  const dir = 1;
+  const roadCenter = roadCenters[1] ?? 0;
+  const x = -streetEdge * 0.58;
+  return {
+    axis,
+    dir,
+    roadCenter,
+    lineCoord: getLaneCoord(axis, roadCenter, dir, laneOffset),
+    x,
+    z: getLaneCoord(axis, roadCenter, dir, laneOffset),
+    targetCoord: nextNode(roadCenters, x, dir, streetEdge),
+    heading: headingFromAxis(axis, dir),
+  };
+}
+
 export function createWorld(rng = Math.random) {
   const roadCenters = createRoadCenters();
   const sidewalkGuides = createSidewalkGuides(roadCenters);
+  const playerSpawn = createPlayerSpawn(sidewalkGuides);
+  const vehicleResetSpawn = createVehicleResetSpawn(roadCenters, STREET_EDGE, LANE_OFFSET);
   const buildings = [];
   const trees = [];
   const lamps = [];
@@ -302,6 +329,7 @@ export function createWorld(rng = Math.random) {
   }
 
   return {
+    districtName: "Harbor Heights",
     size: WORLD_SIZE,
     roadCenters,
     sidewalkGuides,
@@ -313,5 +341,7 @@ export function createWorld(rng = Math.random) {
     laneOffset: LANE_OFFSET,
     streetEdge: STREET_EDGE,
     pickupCount: PICKUP_COUNT,
+    playerSpawn,
+    vehicleResetSpawn,
   };
 }
