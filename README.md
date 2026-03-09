@@ -1,48 +1,54 @@
 # Mini GTA 3D
 
-Przeglądarkowy sandbox 3D zbudowany w `Three.js` i `Vite`. Miasto, ruch pieszy, auta, pickupy, wanted level i policyjny pościg są generowane proceduralnie w stylistyce low-poly.
+A browser-based low-poly 3D sandbox built with `Three.js` and `Vite`.
 
-## Uruchomienie
+The project currently combines on-foot exploration, car stealing, AI traffic,
+pedestrians, cash pickups, a wanted system, and police pursuit inside a
+procedurally generated city district.
+
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Domyślny adres deweloperski:
+Default dev URL:
 
 ```text
 http://localhost:5173
 ```
 
-Build produkcyjny:
+## Build
 
 ```bash
 npm run build
 ```
 
-Testy jednostkowe:
+## Test
 
 ```bash
 npm run test
 ```
 
-## Sterowanie
+## Controls
 
-- strzałki: ruch / jazda
-- `Shift`: sprint pieszo
-- `E`: wejście do auta / wyjście z auta
-- `Spacja`: hamulec ręczny
-- przeciągnięcie myszą po scenie: obrót kamery
-- kółko myszy: zoom kamery
+- `WASD` or arrow keys: move on foot / drive
+- `Shift`: sprint on foot
+- `E`: enter or exit a car
+- `Space`: handbrake
+- `R`: reset player or active vehicle position
+- mouse drag: rotate camera
+- mouse wheel: zoom camera
 
-## Co działa w v1
+## Current gameplay
 
-- third-person kamera dla pieszego i auta
-- proceduralne miasto 3D low-poly
-- chodzenie po mieście i kradzież aut
-- ruch uliczny po pasach i skrzyżowaniach
-- piesi poruszający się po chodnikach
-- pickupy z gotówką
-- wanted level i spawn policji
-- podstawowe kolizje i game over
+- third-person camera for both on-foot and driving modes
+- procedural low-poly city layout
+- on-foot movement and vehicle hijacking
+- AI traffic moving through intersections
+- pedestrians walking on sidewalks
+- cash pickups around the district
+- wanted level and police spawning
+- basic collisions, damage, and game over state
+- start overlay with in-game HUD telemetry
