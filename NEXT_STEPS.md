@@ -3,8 +3,6 @@
 ## Camera and controls
 
 - Keep tuning the on-foot camera follow so it feels stable during diagonal movement and quick stop-start changes.
-- Add a small dead zone before auto-recentering the camera after manual mouse look, so the handoff feels less abrupt.
-- Consider separate camera presets for on-foot and driving in one config file instead of hardcoded values.
 
 ## Vehicle handling
 

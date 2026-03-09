@@ -1,58 +1,131 @@
+import { CAMERA_CONFIG } from "./config.js";
 import { clamp, lerp } from "./math.js";
 
 export function createCameraController(camera) {
   return {
     camera,
-    yaw: -0.75,
-    pitch: 0.62,
-    distance: 16,
+    yaw: CAMERA_CONFIG.onFoot.baseYaw,
+    pitch: CAMERA_CONFIG.onFoot.basePitch,
+    distance: CAMERA_CONFIG.onFoot.baseDistance,
     target: { x: 0, y: 2, z: 0 },
-    manualTimer: 0,
+    recenterTimer: 0,
   };
 }
 
 export function updateCamera(controller, input, state, dt) {
   const look = input.consumeLook();
   const wheel = input.consumeWheel();
-  const hasManualLook = Math.abs(look.x) + Math.abs(look.y) > 0.001;
+  const lookMagnitude = Math.abs(look.x) + Math.abs(look.y);
+  const significantManualLook = lookMagnitude > CAMERA_CONFIG.manualLookDeadZone;
   const driving = state.player.mode === "vehicle";
-  const onFootMoving = !driving && state.player.speed > 0.35;
+  const onFootMoving = !driving && state.player.speed > CAMERA_CONFIG.onFoot.moveThreshold;
 
-  controller.yaw -= look.x * 0.0035;
-  controller.pitch = clamp(controller.pitch - look.y * 0.0025, 0.28, 1.08);
-  controller.distance = clamp(controller.distance + wheel * 0.01, 6.5, 24);
-  controller.manualTimer = hasManualLook ? 1.35 : Math.max(0, controller.manualTimer - dt);
+  controller.yaw -= look.x * CAMERA_CONFIG.lookSensitivityX;
+  controller.pitch = clamp(
+    controller.pitch - look.y * CAMERA_CONFIG.lookSensitivityY,
+    0.28,
+    1.08,
+  );
+  controller.distance = clamp(
+    controller.distance + wheel * CAMERA_CONFIG.zoomSensitivity,
+    CAMERA_CONFIG.zoomMin,
+    CAMERA_CONFIG.zoomMax,
+  );
+  controller.recenterTimer = significantManualLook
+    ? CAMERA_CONFIG.recenterDelay
+    : Math.max(0, controller.recenterTimer - dt);
 
   const target = driving
-    ? { x: state.player.x, y: 2.3, z: state.player.z }
-    : { x: state.player.x, y: 1.45, z: state.player.z };
+    ? {
+        x: state.player.x,
+        y: CAMERA_CONFIG.driving.targetHeight,
+        z: state.player.z,
+      }
+    : {
+        x: state.player.x,
+        y: CAMERA_CONFIG.onFoot.targetHeight,
+        z: state.player.z,
+      };
 
-  if (driving && controller.manualTimer === 0) {
-    controller.yaw = lerp(controller.yaw, state.player.heading - 0.18, dt * 2.4);
-    controller.pitch = lerp(controller.pitch, 0.5, dt * 1.4);
-    controller.distance = lerp(controller.distance, 13.5, dt * 1.15);
-  } else if (onFootMoving && controller.manualTimer === 0) {
-    controller.yaw = lerp(controller.yaw, state.player.heading, dt * 4.6);
-    controller.pitch = lerp(controller.pitch, 0.56, dt * 2.1);
-    controller.distance = lerp(controller.distance, 10.5, dt * 1.8);
+  if (driving && controller.recenterTimer === 0) {
+    controller.yaw = lerp(
+      controller.yaw,
+      state.player.heading + CAMERA_CONFIG.driving.autoYawOffset,
+      dt * CAMERA_CONFIG.driving.autoYawLerp,
+    );
+    controller.pitch = lerp(
+      controller.pitch,
+      CAMERA_CONFIG.driving.autoPitch,
+      dt * CAMERA_CONFIG.driving.autoPitchLerp,
+    );
+    controller.distance = lerp(
+      controller.distance,
+      CAMERA_CONFIG.driving.autoDistance,
+      dt * CAMERA_CONFIG.driving.autoDistanceLerp,
+    );
+  } else if (onFootMoving && controller.recenterTimer === 0) {
+    controller.yaw = lerp(
+      controller.yaw,
+      state.player.heading,
+      dt * CAMERA_CONFIG.onFoot.autoYawLerp,
+    );
+    controller.pitch = lerp(
+      controller.pitch,
+      CAMERA_CONFIG.onFoot.autoPitch,
+      dt * CAMERA_CONFIG.onFoot.autoPitchLerp,
+    );
+    controller.distance = lerp(
+      controller.distance,
+      CAMERA_CONFIG.onFoot.autoDistance,
+      dt * CAMERA_CONFIG.onFoot.autoDistanceLerp,
+    );
   }
 
-  controller.target.x = lerp(controller.target.x, target.x, dt * 7);
-  controller.target.y = lerp(controller.target.y, target.y, dt * 5);
-  controller.target.z = lerp(controller.target.z, target.z, dt * 7);
+  controller.target.x = lerp(
+    controller.target.x,
+    target.x,
+    dt * CAMERA_CONFIG.targetLerpXZ,
+  );
+  controller.target.y = lerp(
+    controller.target.y,
+    target.y,
+    dt * CAMERA_CONFIG.targetLerpY,
+  );
+  controller.target.z = lerp(
+    controller.target.z,
+    target.z,
+    dt * CAMERA_CONFIG.targetLerpXZ,
+  );
 
   const flatDistance = Math.cos(controller.pitch) * controller.distance;
   const desiredX = controller.target.x - Math.cos(controller.yaw) * flatDistance;
   const desiredY = controller.target.y + Math.sin(controller.pitch) * controller.distance;
   const desiredZ = controller.target.z - Math.sin(controller.yaw) * flatDistance;
 
-  controller.camera.position.x = lerp(controller.camera.position.x, desiredX, dt * 7);
-  controller.camera.position.y = lerp(controller.camera.position.y, desiredY, dt * 7);
-  controller.camera.position.z = lerp(controller.camera.position.z, desiredZ, dt * 7);
+  controller.camera.position.x = lerp(
+    controller.camera.position.x,
+    desiredX,
+    dt * CAMERA_CONFIG.positionLerp,
+  );
+  controller.camera.position.y = lerp(
+    controller.camera.position.y,
+    desiredY,
+    dt * CAMERA_CONFIG.positionLerp,
+  );
+  controller.camera.position.z = lerp(
+    controller.camera.position.z,
+    desiredZ,
+    dt * CAMERA_CONFIG.positionLerp,
+  );
 
   const lookAhead = driving
-    ? 4.5 + Math.min(6, state.player.speed * 0.18)
-    : 2.5;
+    ? CAMERA_CONFIG.driving.lookAheadBase +
+      Math.min(
+        CAMERA_CONFIG.driving.lookAheadMaxBonus,
+        state.player.speed * CAMERA_CONFIG.driving.lookAheadSpeedFactor,
+      )
+    : CAMERA_CONFIG.onFoot.lookAhead;
+
   controller.camera.lookAt(
     controller.target.x + Math.cos(controller.yaw) * lookAhead,
     controller.target.y + 0.6,
