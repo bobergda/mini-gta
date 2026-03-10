@@ -22,6 +22,46 @@ Default dev URL:
 http://localhost:5173
 ```
 
+## Godot Prototype (Option 1)
+
+A parallel Godot prototype is available in `godot/` as a migration track from
+the browser build.
+
+### Run in Godot Editor
+
+1. Install Godot `4.x` (recommended: latest stable 4.x).
+2. Open Godot Project Manager.
+3. Click `Import` and select `godot/project.godot`.
+4. Open the project and press `F5` (or click `Run Project`).
+
+Main scene is already configured as:
+
+`res://scenes/Main.tscn`
+
+### Run from terminal
+
+If you have Godot binary in PATH:
+
+```bash
+godot4 --path godot
+```
+
+or (on systems where binary is named `godot`):
+
+```bash
+godot --path godot
+```
+
+Current Godot controls mirror the web version:
+
+- `WASD` or arrow keys: move on foot / drive
+- `Shift`: sprint on foot
+- `E`: enter or exit a car
+- `Space`: handbrake
+- `R`: reset active entity (and recover after game over)
+- mouse drag: rotate camera
+- mouse wheel: zoom camera
+
 ## Build
 
 ```bash
