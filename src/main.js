@@ -1,9 +1,10 @@
 import { createInput } from "./game/input.js";
 import { createWorld } from "./game/world.js";
-import { createGameState, updateGameState } from "./game/simulation.js";
+import { createGameState } from "./game/simulation.js";
 import { createSceneView, renderFrame } from "./game/render.js";
-import { createCameraController, updateCamera } from "./game/camera.js";
-import { createHud, hideStartOverlay, syncHud } from "./game/hud.js";
+import { createCameraController } from "./game/camera.js";
+import { applyHudText, createHud, hideStartOverlay, syncHud } from "./game/hud.js";
+import { advanceFrame, createFrameCounter } from "./game/loop.js";
 
 const root = document.getElementById("game-root");
 const shell = document.getElementById("shell");
@@ -14,11 +15,9 @@ const hud = createHud(document);
 const input = createInput(window, root);
 const sceneView = createSceneView(root, world, state);
 const cameraController = createCameraController(sceneView.camera);
-const frameCounter = {
-  accumulator: 0,
-  frames: 0,
-  fps: 0,
-};
+const frameCounter = createFrameCounter();
+
+applyHudText(hud);
 
 function resize() {
   const rect = root.getBoundingClientRect();
@@ -47,19 +46,7 @@ function frame(now) {
   const dt = Math.min(0.033, (now - previous) / 1000);
   previous = now;
 
-  updateGameState(state, world, input, cameraController, dt);
-  updateCamera(cameraController, input, state, dt);
-
-  if (state.running) {
-    frameCounter.accumulator += dt;
-    frameCounter.frames += 1;
-    if (frameCounter.accumulator >= 0.25) {
-      frameCounter.fps = frameCounter.frames / frameCounter.accumulator;
-      frameCounter.accumulator = 0;
-      frameCounter.frames = 0;
-    }
-  }
-
+  advanceFrame(state, world, input, cameraController, frameCounter, dt);
   syncHud(hud, state, { fps: frameCounter.fps });
   renderFrame(sceneView, state, dt);
   requestAnimationFrame(frame);

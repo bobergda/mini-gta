@@ -10,6 +10,7 @@
  *   vx:number,
  *   vz:number,
  *   heading:number,
+ *   moveHeading:number,
  *   speed:number,
  *   health:number,
  *   cash:number,
@@ -39,7 +40,11 @@
  *   health:number,
  *   color:string,
  *   disabled:boolean,
- *   sirenPhase:number
+ *   sirenPhase:number,
+ *   throttleInput:number,
+ *   steerInput:number,
+ *   stuckTimer:number,
+ *   recoveryCooldown:number
  * }} VehicleState
  *
  * @typedef {{

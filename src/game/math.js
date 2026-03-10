@@ -1,6 +1,7 @@
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const angleWrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+export const angleLerp = (from, to, t) => from + angleWrap(to - from) * t;
 export const distance2D = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
 export const sign = (value) => (value < 0 ? -1 : 1);
 

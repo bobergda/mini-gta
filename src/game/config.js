@@ -9,6 +9,8 @@ export const CAMERA_CONFIG = {
   targetLerpXZ: 7,
   targetLerpY: 5,
   positionLerp: 7,
+  damageShakeFrequency: 38,
+  damageShakeAmplitude: 0.28,
   onFoot: {
     baseYaw: -0.75,
     basePitch: 0.62,
@@ -16,11 +18,14 @@ export const CAMERA_CONFIG = {
     targetHeight: 1.45,
     autoPitch: 0.56,
     autoDistance: 10.5,
-    autoYawLerp: 4.6,
+    autoYawLerp: 4.2,
     autoPitchLerp: 2.1,
     autoDistanceLerp: 1.8,
     moveThreshold: 0.35,
     lookAhead: 2.5,
+    followHeadingLerp: 9.5,
+    followCarry: 0.22,
+    velocityLead: 0.12,
   },
   driving: {
     targetHeight: 2.3,
@@ -34,4 +39,80 @@ export const CAMERA_CONFIG = {
     lookAheadSpeedFactor: 0.18,
     lookAheadMaxBonus: 6,
   },
+};
+
+export const HUD_CONFIG = {
+  maxWantedStars: 5,
+  damageFlashFade: 2.9,
+  damageNoticeFade: 3.8,
+};
+
+export const UI_TEXT = {
+  header: {
+    eyebrow: "LOW-POLY STREET SANDBOX",
+    controlsLabel: "Ruch",
+    controlsValue: "Strzałki / Shift / E / R",
+    cameraLabel: "Kamera",
+    cameraValue: "Mysz + kółko",
+  },
+  overlay: {
+    eyebrow: "PROTOTYPE DISTRICT",
+    lead:
+      "Przejmij auto, zbieraj paczki i utrzymaj przewagę nad radiowozami w proceduralnym mieście.",
+    startButton: "Wjedź do dzielnicy",
+  },
+  hud: {
+    objectiveTitle: "Cel",
+    controlsTitle: "Sterowanie",
+    statusTitle: "Status",
+    districtTitle: "Dzielnica",
+    defaultObjective:
+      "Ukradnij auto, zbieraj paczki i utrzymaj się przy życiu podczas pościgu.",
+    controls: [
+      "Strzałki: ruch / jazda",
+      "Shift: sprint",
+      "E: wsiądź / wysiądź",
+      "Spacja: ręczny",
+      "R: reset pozycji",
+      "Mysz: obrót kamery",
+      "Kółko: zoom",
+    ],
+    statusReady: "Gotowy do wjazdu",
+    statusGameOver: "Koniec gry",
+    statusVehicle: "W aucie",
+    statusOnFoot: "Na piechotę",
+    cashLabel: "Gotówka",
+    wantedLabel: "Pościg",
+    healthLabel: "Zdrowie",
+    speedLabel: "Prędkość",
+    trafficLabel: "Ruch",
+    fpsLabel: "FPS",
+    damageHit: "Uderzenie",
+    damageSources: {
+      collision: "mocne uderzenie",
+      traffic: "ruch uliczny",
+      police: "kontakt z policją",
+    },
+  },
+  startControls: [
+    ["Strzałki / WASD", "Ruch i jazda"],
+    ["Shift", "Sprint pieszo"],
+    ["E", "Wejście i wyjście z auta"],
+    ["Spacja", "Hamulec ręczny"],
+    ["R", "Reset pozycji"],
+    ["Mysz / kółko", "Obrót i zoom kamery"],
+  ],
+};
+
+export const OBJECTIVE_TEXT = {
+  intro: "Ukradnij auto i utrzymaj przewagę, zanim dopadną cię radiowozy.",
+  onFootHint: "Na piechotę jesteś zwrotniejszy, ale trudniej zgubisz pościg.",
+  vehicleHint: "Masz furę. Zbieraj gotówkę i uważaj na policję.",
+  pickup: "Masz łup. Jeszcze kilka paczek albo szybka ucieczka.",
+  pedHit: "Masz krew na zderzaku. Policja natychmiast ruszyła.",
+  vehicleReset: "Auto wróciło na trasę. Ruszaj dalej.",
+  playerReset: "Wróciłeś na start dzielnicy.",
+  onFootWanted: "Jesteś śledzony. Schowaj się albo dorwij auto, by zgubić radiowozy.",
+  recovery: "Silnik znowu ciągnie. Wciśnij gaz i wyjedź z klinczu.",
+  gameOver: "Koniec gry. Odśwież stronę, aby wrócić do miasta.",
 };

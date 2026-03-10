@@ -7,13 +7,22 @@ import {
   TRAFFIC_COUNT,
   VEHICLE_RADIUS,
 } from "./constants.js";
-import { cameraRelativeVector, clamp, distance2D, lerp } from "./math.js";
+import { HUD_CONFIG, OBJECTIVE_TEXT } from "./config.js";
+import {
+  angleLerp,
+  cameraRelativeVector,
+  clamp,
+  distance2D,
+  lerp,
+  projectLocalVelocity,
+} from "./math.js";
 import { createPedestrian, updatePedestrians } from "./systems/pedestrians.js";
 import {
   collideVehicles,
   createParkedVehicle,
   createPoliceVehicle,
   createTrafficVehicle,
+  detectVehicleContact,
   setVehicleRoute,
   updatePlayerVehicle,
   updatePoliceVehicle,
@@ -43,6 +52,7 @@ function createPlayer(world) {
     vx: 0,
     vz: 0,
     heading: world.playerSpawn.heading,
+    moveHeading: world.playerSpawn.heading,
     speed: 0,
     health: 100,
     cash: 0,
@@ -77,13 +87,19 @@ export function createGameState(world, rng = Math.random) {
     nextId,
     time: 0,
     running: false,
-    objective: "Ukradnij auto i utrzymaj przewage, zanim dopadna cie radiowozy.",
+    objective: OBJECTIVE_TEXT.intro,
     gameOver: false,
     world,
     player: createPlayer(world),
     vehicles,
     pedestrians,
     pickups,
+    feedback: {
+      damageFlash: 0,
+      damageNotice: 0,
+      damageShake: 0,
+      damageSource: "collision",
+    },
   };
 }
 
@@ -110,6 +126,7 @@ function resetPlayerToSpawn(player, world) {
   player.vx = 0;
   player.vz = 0;
   player.heading = world.playerSpawn.heading;
+  player.moveHeading = world.playerSpawn.heading;
   player.speed = 0;
 }
 
@@ -126,6 +143,9 @@ function updateOnFoot(player, input, cameraController, world, dt) {
     player.vx = lerp(player.vx, 0, dt * 8);
     player.vz = lerp(player.vz, 0, dt * 8);
     player.speed = Math.hypot(player.vx, player.vz);
+    if (player.speed > 0.08) {
+      player.heading = angleLerp(player.heading, player.moveHeading, dt * 8);
+    }
     return;
   }
 
@@ -134,12 +154,14 @@ function updateOnFoot(player, input, cameraController, world, dt) {
   const localForward = moveForward / length;
   const worldMove = cameraRelativeVector(localX, localForward, cameraController.yaw);
   const speed = sprint ? 12 : 7;
+  const desiredHeading = Math.atan2(worldMove.z, worldMove.x);
 
   player.vx = lerp(player.vx, worldMove.x * speed, dt * 10);
   player.vz = lerp(player.vz, worldMove.z * speed, dt * 10);
   player.x += player.vx * dt;
   player.z += player.vz * dt;
-  player.heading = Math.atan2(player.vz, player.vx);
+  player.moveHeading = angleLerp(player.moveHeading, desiredHeading, dt * 12);
+  player.heading = angleLerp(player.heading, player.moveHeading, dt * 14);
   player.speed = Math.hypot(player.vx, player.vz);
   player.x = clamp(player.x, -world.streetEdge, world.streetEdge);
   player.z = clamp(player.z, -world.streetEdge, world.streetEdge);
@@ -163,11 +185,12 @@ function tryToggleVehicle(state) {
       state.world.streetEdge,
     );
     player.heading = vehicle.heading;
+    player.moveHeading = vehicle.heading;
     vehicle.ai = "parked";
     vehicle.speed = 0;
     vehicle.vx = 0;
     vehicle.vz = 0;
-    state.objective = "Na piechote jestes zwrotniejszy, ale trudniej zgubisz poscig.";
+    state.objective = OBJECTIVE_TEXT.onFootHint;
     return;
   }
 
@@ -187,7 +210,7 @@ function tryToggleVehicle(state) {
     player.vehicleId = best.id;
     best.ai = "player";
     best.speed = Math.max(best.speed, 0);
-    state.objective = "Masz fure. Zbieraj gotowke i uwazaj na policje.";
+    state.objective = OBJECTIVE_TEXT.vehicleHint;
   }
 }
 
@@ -201,6 +224,7 @@ function updatePlayerFromVehicle(state) {
   state.player.x = vehicle.x;
   state.player.z = vehicle.z;
   state.player.heading = vehicle.heading;
+  state.player.moveHeading = vehicle.heading;
   state.player.speed = Math.abs(vehicle.speed);
 }
 
@@ -220,13 +244,77 @@ function resetActiveEntity(state) {
     vehicle.disabled = false;
     player.invuln = Math.max(player.invuln, 0.6);
     updatePlayerFromVehicle(state);
-    state.objective = "Auto wrocilo na trase. Ruszaj dalej.";
+    state.objective = OBJECTIVE_TEXT.vehicleReset;
     return;
   }
 
   resetPlayerToSpawn(player, state.world);
   player.invuln = Math.max(player.invuln, 0.45);
-  state.objective = "Wrociles na start dzielnicy.";
+  state.objective = OBJECTIVE_TEXT.playerReset;
+}
+
+function registerPlayerDamage(state, amount, source, invuln = 0.35) {
+  const player = state.player;
+  if (player.invuln > 0) return false;
+
+  player.health -= amount;
+  player.invuln = invuln;
+  state.feedback.damageFlash = Math.min(1, state.feedback.damageFlash + amount / 28);
+  state.feedback.damageNotice = Math.max(state.feedback.damageNotice, 0.38);
+  state.feedback.damageShake = Math.max(state.feedback.damageShake, 0.35 + amount / 48);
+  state.feedback.damageSource = source;
+  return true;
+}
+
+function decayFeedback(state, dt) {
+  state.feedback.damageFlash = Math.max(0, state.feedback.damageFlash - dt * HUD_CONFIG.damageFlashFade);
+  state.feedback.damageNotice = Math.max(0, state.feedback.damageNotice - dt * HUD_CONFIG.damageNoticeFade);
+  state.feedback.damageShake = Math.max(0, state.feedback.damageShake - dt * 4.6);
+}
+
+function findVehicleBlocker(vehicle, state) {
+  if (Math.abs(vehicle.x) > state.world.streetEdge - 1.4) {
+    return { x: -Math.sign(vehicle.x), z: 0 };
+  }
+  if (Math.abs(vehicle.z) > state.world.streetEdge - 1.4) {
+    return { x: 0, z: -Math.sign(vehicle.z) };
+  }
+
+  for (const other of state.vehicles) {
+    if (other.id === vehicle.id) continue;
+    const contact = detectVehicleContact(vehicle, other);
+    if (!contact) continue;
+    return { x: -contact.normal.x, z: -contact.normal.z };
+  }
+
+  return null;
+}
+
+function recoverPlayerVehicleIfStuck(state, dt) {
+  const player = state.player;
+  if (player.mode !== "vehicle" || player.vehicleId == null) return;
+
+  const vehicle = getVehicleById(state, player.vehicleId);
+  if (!vehicle) return;
+
+  vehicle.recoveryCooldown = Math.max(0, (vehicle.recoveryCooldown ?? 0) - dt);
+  const blocker = findVehicleBlocker(vehicle, state);
+  const driverTryingToMove = Math.abs(vehicle.throttleInput ?? 0) > 0.6;
+  const jammed = blocker && driverTryingToMove && Math.abs(vehicle.speed) < 2.2;
+
+  vehicle.stuckTimer = jammed ? (vehicle.stuckTimer ?? 0) + dt : 0;
+  if (vehicle.stuckTimer < 0.7 || vehicle.recoveryCooldown > 0) return;
+
+  const nudge = 3 + Math.abs(vehicle.steerInput ?? 0) * 0.9;
+  vehicle.x = clamp(vehicle.x + blocker.x * nudge, -state.world.streetEdge, state.world.streetEdge);
+  vehicle.z = clamp(vehicle.z + blocker.z * nudge, -state.world.streetEdge, state.world.streetEdge);
+  vehicle.vx = blocker.x * 4.5;
+  vehicle.vz = blocker.z * 4.5;
+  vehicle.speed = projectLocalVelocity(vehicle.heading, vehicle.vx, vehicle.vz).forward;
+  vehicle.stuckTimer = 0;
+  vehicle.recoveryCooldown = 1.1;
+  player.invuln = Math.max(player.invuln, 0.2);
+  state.objective = OBJECTIVE_TEXT.recovery;
 }
 
 function updateVehicles(state, world, input, dt, rng = Math.random) {
@@ -259,7 +347,7 @@ function updatePickups(state, world, dt, rng = Math.random) {
     if (distance2D(anchor.x, anchor.z, pickup.x, pickup.z) < PICKUP_RADIUS + 1.4) {
       state.player.cash += pickup.value;
       state.pickups.splice(index, 1);
-      state.objective = "Masz lup. Jeszcze kilka paczek albo szybka ucieczka.";
+      state.objective = OBJECTIVE_TEXT.pickup;
     }
   }
   refillPickups(state, world, rng);
@@ -276,11 +364,9 @@ function handleCollisions(state, dt) {
       if (
         distance2D(player.x, player.z, vehicle.x, vehicle.z) <
           PLAYER_RADIUS + VEHICLE_RADIUS &&
-        Math.abs(vehicle.speed) > 8 &&
-        player.invuln <= 0
+        Math.abs(vehicle.speed) > 8
       ) {
-        player.health -= 18;
-        player.invuln = 1;
+        registerPlayerDamage(state, 18, "traffic", 1);
       }
     }
   }
@@ -295,7 +381,7 @@ function handleCollisions(state, dt) {
         ped.alive = false;
         player.cash += 40;
         addWanted(player, 1, 18);
-        state.objective = "Masz krew na zderzaku. Policja natychmiast ruszyla.";
+        state.objective = OBJECTIVE_TEXT.pedHit;
       }
     }
   }
@@ -306,13 +392,8 @@ function handleCollisions(state, dt) {
       const b = state.vehicles[j];
       if (a.ai === "parked" && b.ai === "parked") continue;
       if (collideVehicles(a, b)) {
-        if (
-          playerVehicle &&
-          (a.id === playerVehicle.id || b.id === playerVehicle.id) &&
-          player.invuln <= 0
-        ) {
-          player.health -= 8;
-          player.invuln = 0.35;
+        if (playerVehicle && (a.id === playerVehicle.id || b.id === playerVehicle.id)) {
+          registerPlayerDamage(state, 8, "collision");
         }
       }
     }
@@ -320,9 +401,7 @@ function handleCollisions(state, dt) {
 
   for (const police of state.vehicles.filter((vehicle) => vehicle.ai === "police")) {
     if (distance2D(police.x, police.z, player.x, player.z) < 5.5) {
-      if (player.invuln <= 0) {
-        player.health -= playerVehicle ? 9 : 14;
-        player.invuln = 0.35;
+      if (registerPlayerDamage(state, playerVehicle ? 9 : 14, "police")) {
         player.wantedTimer = Math.max(player.wantedTimer, 12);
       }
     }
@@ -332,7 +411,7 @@ function handleCollisions(state, dt) {
   player.health = clamp(player.health, 0, 100);
   if (player.health === 0) {
     state.gameOver = true;
-    state.objective = "Koniec gry. Odswiez strone, aby wrocic do miasta.";
+    state.objective = OBJECTIVE_TEXT.gameOver;
   }
 }
 
@@ -368,6 +447,7 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   if (!state.running || state.gameOver) return;
 
   state.time += dt;
+  decayFeedback(state, dt);
 
   if (input.consumeAnyPress(["r"])) {
     resetActiveEntity(state);
@@ -388,6 +468,7 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   updatePedestrians(state, world, dt, rng);
   updatePickups(state, world, dt, rng);
   handleCollisions(state, dt);
+  recoverPlayerVehicleIfStuck(state, dt);
   refreshDeadPeds(state, world, rng);
   updatePolicePresence(state, world, dt, rng);
 
@@ -400,6 +481,6 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   }
 
   if (state.player.wanted > 0 && state.player.mode === "onfoot") {
-    state.objective = "Jestes sledzony. Schowaj sie albo dorwij auto, by zgubic radiowozy.";
+    state.objective = OBJECTIVE_TEXT.onFootWanted;
   }
 }

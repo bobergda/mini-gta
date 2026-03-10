@@ -1,4 +1,10 @@
-import { clamp, composeVelocity, distance2D, lerp, projectLocalVelocity } from "../math.js";
+import {
+  clamp,
+  composeVelocity,
+  distance2D,
+  lerp,
+  projectLocalVelocity,
+} from "../math.js";
 import {
   chooseTrafficTurn,
   getLaneCoord,
@@ -8,6 +14,27 @@ import {
 } from "../world.js";
 
 const VEHICLE_COLORS = ["#ff7b54", "#e8b949", "#4db6ac", "#5874dc", "#ef5350", "#8e7dff"];
+const VEHICLE_HALF_LENGTH = 2.1;
+const VEHICLE_HALF_WIDTH = 1.08;
+
+function createVehicleBase(id, kind, ai, data) {
+  return {
+    id,
+    kind,
+    ai,
+    vx: 0,
+    vz: 0,
+    speed: 0,
+    health: kind === "police" ? 140 : 100,
+    disabled: false,
+    sirenPhase: 0,
+    throttleInput: 0,
+    steerInput: 0,
+    stuckTimer: 0,
+    recoveryCooldown: 0,
+    ...data,
+  };
+}
 
 export function createTrafficVehicle(id, world, rng = Math.random) {
   const axis = rng() > 0.5 ? "x" : "z";
@@ -17,28 +44,19 @@ export function createTrafficVehicle(id, world, rng = Math.random) {
   const startCoord = -world.streetEdge + rng() * world.streetEdge * 2;
   const targetCoord = nextNode(world.roadCenters, startCoord, dir, world.streetEdge);
 
-  return {
-    id,
-    kind: "civilian",
-    ai: "traffic",
+  return createVehicleBase(id, "civilian", "traffic", {
     x: axis === "x" ? startCoord : lineCoord,
     y: 0,
     z: axis === "z" ? startCoord : lineCoord,
-    vx: 0,
-    vz: 0,
-    speed: 0,
     heading: headingFromAxis(axis, dir),
     axis,
     dir,
     lineCoord,
     roadCenter,
     targetCoord,
-    health: 100,
     color: VEHICLE_COLORS[Math.floor(rng() * VEHICLE_COLORS.length)],
-    disabled: false,
-    sirenPhase: 0,
     cruiseSpeed: 11.5 + rng() * 3.5,
-  };
+  });
 }
 
 export function createParkedVehicle(id, world, rng = Math.random) {
@@ -51,53 +69,36 @@ export function createParkedVehicle(id, world, rng = Math.random) {
       ? roadCenter + (dir > 0 ? -curbOffset : curbOffset)
       : roadCenter + (dir > 0 ? curbOffset : -curbOffset);
   const position = -world.streetEdge * 0.65 + rng() * world.streetEdge * 1.3;
-  return {
-    id,
-    kind: "civilian",
-    ai: "parked",
+
+  return createVehicleBase(id, "civilian", "parked", {
     x: axis === "x" ? position : lineCoord,
     y: 0,
     z: axis === "z" ? position : lineCoord,
-    vx: 0,
-    vz: 0,
-    speed: 0,
     heading: headingFromAxis(axis, dir),
     axis,
     dir,
     lineCoord,
     roadCenter,
     targetCoord: position,
-    health: 100,
     color: VEHICLE_COLORS[Math.floor(rng() * VEHICLE_COLORS.length)],
-    disabled: false,
-    sirenPhase: 0,
     cruiseSpeed: 0,
-  };
+  });
 }
 
 export function createPoliceVehicle(id, world, spawn) {
-  return {
-    id,
-    kind: "police",
-    ai: "police",
+  return createVehicleBase(id, "police", "police", {
     x: spawn.x,
     y: 0,
     z: spawn.z,
-    vx: 0,
-    vz: 0,
-    speed: 0,
     heading: spawn.heading,
     axis: spawn.axis,
     dir: spawn.dir,
     lineCoord: spawn.lineCoord,
     roadCenter: spawn.roadCenter,
     targetCoord: spawn.targetCoord,
-    health: 140,
     color: "#ffffff",
-    disabled: false,
-    sirenPhase: 0,
     cruiseSpeed: 19.5,
-  };
+  });
 }
 
 export function setVehicleRoute(vehicle, route) {
@@ -142,10 +143,7 @@ function computeTrafficFactor(vehicle, trafficState) {
 
   for (const other of trafficState.vehicles) {
     if (other.id === vehicle.id || other.ai === "parked") continue;
-    factor = Math.min(
-      factor,
-      computeObstacleFactor(vehicle, other, 28, 7, 0.22),
-    );
+    factor = Math.min(factor, computeObstacleFactor(vehicle, other, 28, 7, 0.22));
   }
 
   const playerAnchor = trafficState.playerAnchor;
@@ -157,6 +155,57 @@ function computeTrafficFactor(vehicle, trafficState) {
   }
 
   return factor;
+}
+
+function getVehicleBasis(vehicle) {
+  return {
+    forward: { x: Math.cos(vehicle.heading), z: Math.sin(vehicle.heading) },
+    right: { x: -Math.sin(vehicle.heading), z: Math.cos(vehicle.heading) },
+  };
+}
+
+function getProjectionRadius(vehicle, axis, basis) {
+  return (
+    Math.abs(axis.x * basis.forward.x + axis.z * basis.forward.z) * VEHICLE_HALF_LENGTH +
+    Math.abs(axis.x * basis.right.x + axis.z * basis.right.z) * VEHICLE_HALF_WIDTH
+  );
+}
+
+export function detectVehicleContact(a, b) {
+  const gap = distance2D(a.x, a.z, b.x, b.z);
+  if (gap >= VEHICLE_HALF_LENGTH * 2.8) return null;
+
+  const basisA = getVehicleBasis(a);
+  const basisB = getVehicleBasis(b);
+  const center = { x: b.x - a.x, z: b.z - a.z };
+  const axes = [basisA.forward, basisA.right, basisB.forward, basisB.right];
+  let smallestOverlap = Infinity;
+  let normal = null;
+
+  for (const axis of axes) {
+    const centerDistance = center.x * axis.x + center.z * axis.z;
+    const overlap =
+      getProjectionRadius(a, axis, basisA) +
+      getProjectionRadius(b, axis, basisB) -
+      Math.abs(centerDistance);
+
+    if (overlap <= 0) {
+      return null;
+    }
+
+    if (overlap < smallestOverlap) {
+      smallestOverlap = overlap;
+      normal =
+        centerDistance < 0
+          ? { x: -axis.x, z: -axis.z }
+          : { x: axis.x, z: axis.z };
+    }
+  }
+
+  return {
+    overlap: smallestOverlap,
+    normal: normal ?? { x: 1, z: 0 },
+  };
 }
 
 export function updateTrafficVehicle(vehicle, world, trafficState, dt, rng = Math.random) {
@@ -236,21 +285,35 @@ export function updatePlayerVehicle(vehicle, world, input, dt) {
   const onRoad =
     Math.abs(vehicle.z - nearestValue(world.roadCenters, vehicle.z)) < world.roadWidth * 0.6 ||
     Math.abs(vehicle.x - nearestValue(world.roadCenters, vehicle.x)) < world.roadWidth * 0.6;
+  const maxForwardSpeed = onRoad ? 28 : 20;
+  const speedRatio = clamp(Math.abs(forwardSpeed) / maxForwardSpeed, 0, 1);
+  const driveForce = throttle >= 0 ? 34 : 24;
+  const drag = braking ? 7.2 : onRoad ? 2.1 : 3.8;
+  const lowSpeedBoost = throttle !== 0 ? 1 - speedRatio * 0.55 : 0.42;
 
-  forwardSpeed += throttle * (throttle >= 0 ? 32 : 22) * dt;
-  forwardSpeed = Math.max(-10, Math.min(onRoad ? 28 : 20, forwardSpeed));
-  forwardSpeed = lerp(forwardSpeed, 0, dt * (braking ? 6.2 : onRoad ? 1.8 : 3.4));
-  lateralSpeed = lerp(lateralSpeed, 0, dt * (onRoad ? 12 : 4));
+  forwardSpeed += throttle * driveForce * dt * lowSpeedBoost;
+  forwardSpeed = clamp(forwardSpeed, -11, maxForwardSpeed);
+  forwardSpeed = lerp(forwardSpeed, 0, dt * drag);
+  lateralSpeed = lerp(lateralSpeed, 0, dt * (onRoad ? 15 : 5.5));
 
-  const turnRate = braking ? 2.4 : 1.8;
+  const steeringGrip = braking ? 3.25 : lerp(3.4, 1.15, speedRatio);
+  const steeringAuthority = Math.max(0.42, 1 - speedRatio * 0.48);
+  const steeringScale = Math.max(0.3, Math.abs(forwardSpeed) / 5);
   vehicle.heading +=
-    steer * turnRate * dt * Math.min(1.4, Math.abs(forwardSpeed) / 7) * (forwardSpeed >= 0 ? 1 : -0.55);
+    steer *
+    steeringGrip *
+    steeringAuthority *
+    steeringScale *
+    dt *
+    (forwardSpeed >= 0 ? 1 : -0.52);
 
-  const sideSlip = braking ? 0.32 : onRoad ? 0.14 : 0.4;
+  const sideSlip = braking ? 0.22 : onRoad ? lerp(0.08, 0.16, speedRatio) : 0.34;
   const velocity = composeVelocity(vehicle.heading, forwardSpeed, lateralSpeed * sideSlip);
   vehicle.vx = velocity.x;
   vehicle.vz = velocity.z;
   vehicle.speed = forwardSpeed;
+  vehicle.throttleInput = throttle;
+  vehicle.steerInput = steer;
   vehicle.x += vehicle.vx * dt;
   vehicle.z += vehicle.vz * dt;
   vehicle.x = Math.max(-world.streetEdge, Math.min(world.streetEdge, vehicle.x));
@@ -258,10 +321,29 @@ export function updatePlayerVehicle(vehicle, world, input, dt) {
 }
 
 export function collideVehicles(a, b) {
-  const gap = distance2D(a.x, a.z, b.x, b.z);
-  if (gap >= 5.1) return false;
-  const bump = (a.speed - b.speed) * 0.4;
-  a.speed = -bump;
-  b.speed = bump;
+  const contact = detectVehicleContact(a, b);
+  if (!contact) return false;
+
+  const massA = a.ai === "parked" ? 4 : 1;
+  const massB = b.ai === "parked" ? 4 : 1;
+  const pushA = massB / (massA + massB);
+  const pushB = massA / (massA + massB);
+  const separation = contact.overlap + 0.04;
+
+  a.x -= contact.normal.x * separation * pushA;
+  a.z -= contact.normal.z * separation * pushA;
+  b.x += contact.normal.x * separation * pushB;
+  b.z += contact.normal.z * separation * pushB;
+
+  const velocityAlongNormalA = a.vx * contact.normal.x + a.vz * contact.normal.z;
+  const velocityAlongNormalB = b.vx * contact.normal.x + b.vz * contact.normal.z;
+  const exchange = (velocityAlongNormalA - velocityAlongNormalB) * 0.48;
+
+  a.vx -= contact.normal.x * exchange * pushA;
+  a.vz -= contact.normal.z * exchange * pushA;
+  b.vx += contact.normal.x * exchange * pushB;
+  b.vz += contact.normal.z * exchange * pushB;
+  a.speed = projectLocalVelocity(a.heading, a.vx, a.vz).forward;
+  b.speed = projectLocalVelocity(b.heading, b.vx, b.vz).forward;
   return true;
 }

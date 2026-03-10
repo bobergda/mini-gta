@@ -1,17 +1,16 @@
 # Next Steps
 
-## Camera and controls
+## Progression
 
-- Keep tuning the on-foot camera follow so it feels stable during diagonal movement and quick stop-start changes.
+- Add simple score targets or district tasks so pickups, escapes, and survival feed into a clearer round structure.
+- Introduce a heat payout that converts wanted-level survival into bonus cash.
 
-## Vehicle handling
+## World behavior
 
-- Rework player car steering so low-speed turning is sharper and high-speed turning is less floaty.
-- Replace the current circle-based vehicle collision with oriented bounds, because angled car contact still feels too loose.
-- Add a lightweight recovery rule when the player car gets stuck against world edges or parked cars.
+- Give pedestrians stronger avoidance near fast-moving vehicles and active police chases.
+- Add traffic lane variety such as rare stops, lane swaps, or light junction pacing so the streets feel less deterministic.
 
-## Game feel
+## Presentation
 
-- Add a short hit reaction and screen feedback when police or traffic damage the player.
-- Make HUD text configurable and clean up the remaining mixed encoding in older content like `README.md`.
-- Add one smoke test for the main update loop so camera/input regressions are caught earlier than manual playtesting.
+- Layer in audio cues for sirens, collisions, pickups, and UI hits.
+- Add lightweight pause/restart controls and an end-of-run summary card.

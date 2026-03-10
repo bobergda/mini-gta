@@ -126,6 +126,19 @@ h1 {
   outline: none;
 }
 
+.damage-flash {
+  --damage-alpha: 0;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: var(--damage-alpha);
+  background:
+    radial-gradient(circle at center, rgba(255, 200, 180, 0.06), transparent 42%),
+    linear-gradient(180deg, rgba(255, 68, 68, 0.15), rgba(96, 0, 0, 0.28));
+  transition: opacity 70ms linear;
+}
+
 .start-overlay {
   position: absolute;
   inset: 0;
@@ -196,6 +209,10 @@ h1 {
   cursor: pointer;
 }
 
+#startButton:hover {
+  filter: brightness(1.04);
+}
+
 .overlay {
   position: absolute;
   top: 18px;
@@ -203,6 +220,7 @@ h1 {
   flex-direction: column;
   gap: 12px;
   width: min(280px, calc(100% - 36px));
+  z-index: 3;
 }
 
 .overlay.left {
@@ -243,6 +261,11 @@ h1 {
 #statusLine.dead,
 #healthLine.dead {
   color: var(--danger);
+}
+
+#healthLine.alert {
+  color: #ffd2b8;
+  text-shadow: 0 0 14px rgba(255, 128, 96, 0.4);
 }
 
 @media (max-width: 980px) {

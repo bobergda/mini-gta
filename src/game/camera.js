@@ -1,5 +1,5 @@
 import { CAMERA_CONFIG } from "./config.js";
-import { clamp, lerp } from "./math.js";
+import { angleLerp, clamp, lerp } from "./math.js";
 
 export function createCameraController(camera) {
   return {
@@ -9,6 +9,8 @@ export function createCameraController(camera) {
     distance: CAMERA_CONFIG.onFoot.baseDistance,
     target: { x: 0, y: 2, z: 0 },
     recenterTimer: 0,
+    followYaw: CAMERA_CONFIG.onFoot.baseYaw,
+    movementCarry: 0,
   };
 }
 
@@ -19,6 +21,7 @@ export function updateCamera(controller, input, state, dt) {
   const significantManualLook = lookMagnitude > CAMERA_CONFIG.manualLookDeadZone;
   const driving = state.player.mode === "vehicle";
   const onFootMoving = !driving && state.player.speed > CAMERA_CONFIG.onFoot.moveThreshold;
+  const onFootHeading = state.player.moveHeading ?? state.player.heading;
 
   controller.yaw -= look.x * CAMERA_CONFIG.lookSensitivityX;
   controller.pitch = clamp(
@@ -42,13 +45,26 @@ export function updateCamera(controller, input, state, dt) {
         z: state.player.z,
       }
     : {
-        x: state.player.x,
+        x: state.player.x + state.player.vx * CAMERA_CONFIG.onFoot.velocityLead,
         y: CAMERA_CONFIG.onFoot.targetHeight,
-        z: state.player.z,
+        z: state.player.z + state.player.vz * CAMERA_CONFIG.onFoot.velocityLead,
       };
 
+  if (!driving) {
+    if (onFootMoving) {
+      controller.followYaw = angleLerp(
+        controller.followYaw,
+        onFootHeading,
+        dt * CAMERA_CONFIG.onFoot.followHeadingLerp,
+      );
+      controller.movementCarry = CAMERA_CONFIG.onFoot.followCarry;
+    } else {
+      controller.movementCarry = Math.max(0, controller.movementCarry - dt);
+    }
+  }
+
   if (driving && controller.recenterTimer === 0) {
-    controller.yaw = lerp(
+    controller.yaw = angleLerp(
       controller.yaw,
       state.player.heading + CAMERA_CONFIG.driving.autoYawOffset,
       dt * CAMERA_CONFIG.driving.autoYawLerp,
@@ -63,10 +79,10 @@ export function updateCamera(controller, input, state, dt) {
       CAMERA_CONFIG.driving.autoDistance,
       dt * CAMERA_CONFIG.driving.autoDistanceLerp,
     );
-  } else if (onFootMoving && controller.recenterTimer === 0) {
-    controller.yaw = lerp(
+  } else if ((onFootMoving || controller.movementCarry > 0) && controller.recenterTimer === 0) {
+    controller.yaw = angleLerp(
       controller.yaw,
-      state.player.heading,
+      controller.followYaw,
       dt * CAMERA_CONFIG.onFoot.autoYawLerp,
     );
     controller.pitch = lerp(
@@ -101,20 +117,28 @@ export function updateCamera(controller, input, state, dt) {
   const desiredX = controller.target.x - Math.cos(controller.yaw) * flatDistance;
   const desiredY = controller.target.y + Math.sin(controller.pitch) * controller.distance;
   const desiredZ = controller.target.z - Math.sin(controller.yaw) * flatDistance;
+  const damageShake = state.feedback?.damageShake ?? 0;
+  const shakePhase = state.time * CAMERA_CONFIG.damageShakeFrequency;
+  const shakeOffsetX =
+    Math.sin(shakePhase) * damageShake * CAMERA_CONFIG.damageShakeAmplitude;
+  const shakeOffsetY =
+    Math.cos(shakePhase * 1.3) * damageShake * CAMERA_CONFIG.damageShakeAmplitude * 0.5;
+  const shakeOffsetZ =
+    Math.sin(shakePhase * 0.82) * damageShake * CAMERA_CONFIG.damageShakeAmplitude;
 
   controller.camera.position.x = lerp(
     controller.camera.position.x,
-    desiredX,
+    desiredX + shakeOffsetX,
     dt * CAMERA_CONFIG.positionLerp,
   );
   controller.camera.position.y = lerp(
     controller.camera.position.y,
-    desiredY,
+    desiredY + shakeOffsetY,
     dt * CAMERA_CONFIG.positionLerp,
   );
   controller.camera.position.z = lerp(
     controller.camera.position.z,
-    desiredZ,
+    desiredZ + shakeOffsetZ,
     dt * CAMERA_CONFIG.positionLerp,
   );
 
