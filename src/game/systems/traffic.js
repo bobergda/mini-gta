@@ -285,14 +285,14 @@ export function updatePlayerVehicle(vehicle, world, input, dt) {
   const onRoad =
     Math.abs(vehicle.z - nearestValue(world.roadCenters, vehicle.z)) < world.roadWidth * 0.6 ||
     Math.abs(vehicle.x - nearestValue(world.roadCenters, vehicle.x)) < world.roadWidth * 0.6;
-  const maxForwardSpeed = onRoad ? 28 : 20;
+  const maxForwardSpeed = onRoad ? 42 : 28;
   const speedRatio = clamp(Math.abs(forwardSpeed) / maxForwardSpeed, 0, 1);
-  const driveForce = throttle >= 0 ? 34 : 24;
-  const drag = braking ? 7.2 : onRoad ? 2.1 : 3.8;
+  const driveForce = throttle >= 0 ? 46 : 28;
+  const drag = braking ? 7.6 : onRoad ? 1.7 : 3.1;
   const lowSpeedBoost = throttle !== 0 ? 1 - speedRatio * 0.55 : 0.42;
 
   forwardSpeed += throttle * driveForce * dt * lowSpeedBoost;
-  forwardSpeed = clamp(forwardSpeed, -11, maxForwardSpeed);
+  forwardSpeed = clamp(forwardSpeed, -14, maxForwardSpeed);
   forwardSpeed = lerp(forwardSpeed, 0, dt * drag);
   lateralSpeed = lerp(lateralSpeed, 0, dt * (onRoad ? 15 : 5.5));
 
