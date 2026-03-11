@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "three": "^0.181.1"
+    "@babylonjs/core": "^8.33.4"
   },
   "devDependencies": {
     "vite": "^7.1.10",

@@ -1,6 +1,6 @@
 # Mini GTA 3D
 
-A browser-based low-poly 3D sandbox built with `Three.js` and `Vite`.
+A browser-based low-poly 3D sandbox built with `Babylon.js` and `Vite`.
 
 The project currently combines on-foot exploration, car stealing, AI traffic,
 pedestrians, cash pickups, a wanted system, and police pursuit inside a
@@ -22,7 +22,7 @@ Default dev URL:
 http://localhost:5173
 ```
 
-## Godot Prototype (Option 1)
+## Godot Prototype
 
 A parallel Godot prototype is available in `godot/` as a migration track from
 the browser build.
