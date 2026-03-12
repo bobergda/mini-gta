@@ -125,15 +125,20 @@ export function updateCamera(controller, input, state, dt) {
     Math.cos(shakePhase * 1.3) * damageShake * CAMERA_CONFIG.damageShakeAmplitude * 0.5;
   const shakeOffsetZ =
     Math.sin(shakePhase * 0.82) * damageShake * CAMERA_CONFIG.damageShakeAmplitude;
+  const movementPhase = state.time * (CAMERA_CONFIG.damageShakeFrequency * CAMERA_CONFIG.movementSwayFrequency);
+  const movementSway =
+    Math.min(1, state.player.speed / 28) * CAMERA_CONFIG.movementSwayAmplitude;
+  const swayOffsetY = Math.sin(movementPhase) * movementSway;
+  const swayOffsetX = Math.cos(movementPhase * 0.7) * movementSway * 0.35;
 
   controller.camera.position.x = lerp(
     controller.camera.position.x,
-    desiredX + shakeOffsetX,
+    desiredX + shakeOffsetX + swayOffsetX,
     dt * CAMERA_CONFIG.positionLerp,
   );
   controller.camera.position.y = lerp(
     controller.camera.position.y,
-    desiredY + shakeOffsetY,
+    desiredY + shakeOffsetY + swayOffsetY,
     dt * CAMERA_CONFIG.positionLerp,
   );
   controller.camera.position.z = lerp(

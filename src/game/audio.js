@@ -758,3 +758,315 @@ export function createAudioSystem(windowRef) {
     update,
   };
 }
+
+function setAudioParam(param, value, time, smoothing = 0.08) {
+  if (!param) return;
+  if (typeof param.cancelScheduledValues === "function") {
+    param.cancelScheduledValues(time);
+  }
+  if (typeof param.setTargetAtTime === "function") {
+    param.setTargetAtTime(value, time, smoothing);
+    return;
+  }
+  param.value = value;
+}
+
+function createLoopingNoise(ctx) {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let index = 0; index < data.length; index += 1) {
+    data[index] = Math.random() * 2 - 1;
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  return source;
+}
+
+function playTone(controller, options) {
+  if (!controller.ctx || !controller.output) return;
+  const ctx = controller.ctx;
+  const startAt = ctx.currentTime + (options.delay ?? 0);
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  oscillator.type = options.type ?? "sine";
+  oscillator.frequency.value = options.frequency ?? 440;
+  if (typeof options.sweepTo === "number") {
+    oscillator.frequency.linearRampToValueAtTime(
+      options.sweepTo,
+      startAt + (options.duration ?? 0.12),
+    );
+  }
+
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(
+    options.gain ?? 0.12,
+    startAt + (options.attack ?? 0.01),
+  );
+  gain.gain.exponentialRampToValueAtTime(
+    0.0001,
+    startAt + (options.duration ?? 0.16),
+  );
+
+  oscillator.connect(gain);
+  gain.connect(controller.output);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + (options.duration ?? 0.16) + 0.02);
+}
+
+function playNoiseBurst(controller, options = {}) {
+  if (!controller.ctx || !controller.output) return;
+  const ctx = controller.ctx;
+  const source = createLoopingNoise(ctx);
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  const startAt = ctx.currentTime + (options.delay ?? 0);
+  const duration = options.duration ?? 0.14;
+
+  filter.type = options.filterType ?? "bandpass";
+  filter.frequency.value = options.frequency ?? 950;
+  filter.Q.value = options.q ?? 0.8;
+
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(options.gain ?? 0.08, startAt + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(controller.output);
+  source.start(startAt);
+  source.stop(startAt + duration + 0.03);
+}
+
+function ensureGraph(controller) {
+  if (controller.ctx) {
+    return controller.ctx;
+  }
+
+  const AudioCtor = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AudioCtor) {
+    return null;
+  }
+
+  const ctx = new AudioCtor();
+  const output = ctx.createGain();
+  const master = ctx.createGain();
+  output.connect(master);
+  master.connect(ctx.destination);
+
+  const ambienceSource = createLoopingNoise(ctx);
+  const ambienceFilter = ctx.createBiquadFilter();
+  const ambienceGain = ctx.createGain();
+  ambienceFilter.type = "lowpass";
+  ambienceFilter.frequency.value = 620;
+  ambienceGain.gain.value = 0.0001;
+  ambienceSource.connect(ambienceFilter);
+  ambienceFilter.connect(ambienceGain);
+  ambienceGain.connect(output);
+  ambienceSource.start();
+
+  const skidSource = createLoopingNoise(ctx);
+  const skidFilter = ctx.createBiquadFilter();
+  const skidGain = ctx.createGain();
+  skidFilter.type = "bandpass";
+  skidFilter.frequency.value = 1280;
+  skidFilter.Q.value = 0.55;
+  skidGain.gain.value = 0.0001;
+  skidSource.connect(skidFilter);
+  skidFilter.connect(skidGain);
+  skidGain.connect(output);
+  skidSource.start();
+
+  const engineOsc = ctx.createOscillator();
+  const engineFilter = ctx.createBiquadFilter();
+  const engineGain = ctx.createGain();
+  engineOsc.type = "sawtooth";
+  engineOsc.frequency.value = 70;
+  engineFilter.type = "lowpass";
+  engineFilter.frequency.value = 360;
+  engineGain.gain.value = 0.0001;
+  engineOsc.connect(engineFilter);
+  engineFilter.connect(engineGain);
+  engineGain.connect(output);
+  engineOsc.start();
+
+  const sirenOsc = ctx.createOscillator();
+  const sirenGain = ctx.createGain();
+  sirenOsc.type = "triangle";
+  sirenOsc.frequency.value = 710;
+  sirenGain.gain.value = 0.0001;
+  sirenOsc.connect(sirenGain);
+  sirenGain.connect(output);
+  sirenOsc.start();
+
+  controller.ctx = ctx;
+  controller.output = output;
+  controller.master = master;
+  controller.layers = {
+    ambienceGain,
+    engineGain,
+    engineOsc,
+    engineFilter,
+    skidGain,
+    skidFilter,
+    sirenGain,
+    sirenOsc,
+  };
+
+  master.gain.value = controller.muted ? 0 : 0.92;
+  return ctx;
+}
+
+export function createAudioController() {
+  return {
+    ctx: null,
+    output: null,
+    master: null,
+    layers: null,
+    muted: false,
+    unlocked: false,
+    lastImpactAt: null,
+  };
+}
+
+export function getEngineAudioProfile(speed, steerAmount = 0) {
+  const clampedSpeed = Math.max(0, Math.abs(speed));
+  const clampedSteer = Math.min(1, Math.abs(steerAmount));
+
+  return {
+    frequency: 72 + clampedSpeed * 6.2,
+    gain: Math.min(0.19, 0.015 + clampedSpeed * 0.0036),
+    filterFrequency: 340 + clampedSpeed * 28 + clampedSteer * 180,
+  };
+}
+
+export function getSkidAudioLevel(vehicle) {
+  if (!vehicle) return 0;
+  const braking = Math.abs(vehicle.brakeInput ?? 0);
+  const slip = Math.max(0, vehicle.slip ?? 0);
+  const speed = Math.abs(vehicle.speed ?? 0);
+  return Math.min(0.14, braking * 0.04 + slip * 0.085 + speed * 0.0009);
+}
+
+export async function unlockAudio(controller) {
+  const ctx = ensureGraph(controller);
+  if (!ctx) return false;
+  if (typeof ctx.resume === "function") {
+    await ctx.resume();
+  }
+  controller.unlocked = ctx.state !== "suspended";
+  return controller.unlocked;
+}
+
+export function setMuted(controller, muted) {
+  controller.muted = muted;
+  if (controller.master?.gain) {
+    controller.master.gain.value = muted ? 0 : 0.92;
+  }
+}
+
+function handleEvent(controller, event) {
+  const ctx = controller.ctx;
+  if (!ctx || controller.muted) return;
+
+  switch (event.type) {
+    case "run_started":
+      playTone(controller, { type: "square", frequency: 440, sweepTo: 580, duration: 0.1, gain: 0.06 });
+      playTone(controller, {
+        type: "triangle",
+        frequency: 660,
+        sweepTo: 760,
+        duration: 0.12,
+        gain: 0.05,
+        delay: 0.04,
+      });
+      break;
+    case "pickup_collected":
+      playTone(controller, { type: "triangle", frequency: 760, sweepTo: 980, duration: 0.13, gain: 0.08 });
+      break;
+    case "vehicle_entered":
+      playTone(controller, { type: "square", frequency: 240, sweepTo: 190, duration: 0.09, gain: 0.055 });
+      break;
+    case "vehicle_exited":
+      playTone(controller, { type: "square", frequency: 190, sweepTo: 260, duration: 0.09, gain: 0.04 });
+      break;
+    case "wanted_increased":
+      playTone(controller, { type: "sawtooth", frequency: 520, sweepTo: 420, duration: 0.16, gain: 0.07 });
+      playTone(controller, { type: "triangle", frequency: 660, sweepTo: 780, duration: 0.16, gain: 0.035, delay: 0.02 });
+      break;
+    case "district_event_started":
+      playTone(controller, { type: "sine", frequency: 510, sweepTo: 620, duration: 0.18, gain: 0.05 });
+      break;
+    case "district_event_completed":
+      playTone(controller, { type: "triangle", frequency: 500, sweepTo: 760, duration: 0.22, gain: 0.07 });
+      playTone(controller, { type: "triangle", frequency: 760, sweepTo: 980, duration: 0.18, gain: 0.05, delay: 0.05 });
+      break;
+    case "district_event_failed":
+      playTone(controller, { type: "sawtooth", frequency: 300, sweepTo: 180, duration: 0.2, gain: 0.05 });
+      break;
+    case "damage_taken":
+    case "collision_heavy":
+      if (controller.lastImpactAt == null || ctx.currentTime - controller.lastImpactAt > 0.16) {
+        controller.lastImpactAt = ctx.currentTime;
+        playNoiseBurst(controller, { frequency: 920, gain: event.type === "collision_heavy" ? 0.12 : 0.08, duration: 0.16 });
+      }
+      break;
+    case "game_over":
+    case "time_up":
+      playTone(controller, { type: "sawtooth", frequency: 330, sweepTo: 180, duration: 0.28, gain: 0.085 });
+      playTone(controller, { type: "triangle", frequency: 210, sweepTo: 120, duration: 0.34, gain: 0.06, delay: 0.06 });
+      break;
+    default:
+      break;
+  }
+}
+
+export function syncAudio(controller, state, events = [], dt = 0.016) {
+  if (!controller.unlocked || controller.muted) {
+    return;
+  }
+
+  const ctx = ensureGraph(controller);
+  if (!ctx || !controller.layers) {
+    return;
+  }
+
+  const now = ctx.currentTime;
+  const activeVehicle =
+    state.player.mode === "vehicle"
+      ? state.vehicles.find((vehicle) => vehicle.id === state.player.vehicleId) ?? null
+      : null;
+  const engineProfile = getEngineAudioProfile(activeVehicle?.speed ?? 0, activeVehicle?.steerInput ?? 0);
+  const skidLevel = getSkidAudioLevel(activeVehicle);
+  const nearestPolice = state.vehicles.find((vehicle) => vehicle.kind === "police") ?? null;
+  const wantedMix = Math.min(1, state.player.wanted / 5);
+
+  setAudioParam(controller.layers.engineOsc.frequency, engineProfile.frequency, now);
+  setAudioParam(controller.layers.engineFilter.frequency, engineProfile.filterFrequency, now);
+  setAudioParam(controller.layers.engineGain.gain, activeVehicle ? engineProfile.gain : 0.0001, now, 0.06);
+
+  setAudioParam(controller.layers.skidGain.gain, skidLevel || 0.0001, now, 0.04);
+  setAudioParam(
+    controller.layers.skidFilter.frequency,
+    880 + Math.min(520, Math.abs(activeVehicle?.speed ?? 0) * 14),
+    now,
+    0.04,
+  );
+
+  const ambienceGain = state.running && !state.gameOver ? 0.028 + wantedMix * 0.014 + dt * 0.002 : 0.0001;
+  setAudioParam(controller.layers.ambienceGain.gain, ambienceGain, now, 0.2);
+
+  if (nearestPolice && state.player.wanted > 0 && !state.gameOver) {
+    const sirenFreq = 720 + Math.sin(nearestPolice.sirenPhase) * 145;
+    setAudioParam(controller.layers.sirenOsc.frequency, sirenFreq, now, 0.04);
+    setAudioParam(controller.layers.sirenGain.gain, 0.018 + wantedMix * 0.045, now, 0.05);
+  } else {
+    setAudioParam(controller.layers.sirenGain.gain, 0.0001, now, 0.08);
+  }
+
+  for (const event of events) {
+    handleEvent(controller, event);
+  }
+}

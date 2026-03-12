@@ -1,13 +1,14 @@
 :root {
   --bg: #11141a;
-  --panel: rgba(11, 16, 24, 0.78);
-  --panel-strong: rgba(9, 14, 20, 0.9);
+  --panel: rgba(15, 20, 24, 0.78);
+  --panel-strong: rgba(10, 14, 18, 0.92);
   --panel-border: rgba(255, 255, 255, 0.12);
   --text: #fbf4e4;
   --muted: #c8baa1;
-  --accent: #ef5b36;
-  --accent-2: #ffd166;
+  --accent: #f06a39;
+  --accent-2: #ffd08b;
   --danger: #ff8b8b;
+  --glow: rgba(255, 164, 92, 0.18);
 }
 
 * {
@@ -19,8 +20,8 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top, rgba(255, 90, 54, 0.16), transparent 34%),
-    linear-gradient(135deg, #0a0b0e 0%, #171b22 55%, #0c0d11 100%);
+    radial-gradient(circle at top, rgba(255, 145, 76, 0.2), transparent 34%),
+    linear-gradient(145deg, #090a0d 0%, #171a1f 45%, #0d1014 100%);
   color: var(--text);
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
 }
@@ -76,7 +77,7 @@ h1 {
 .start-card {
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(14px);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .panel,
@@ -104,7 +105,7 @@ h1 {
   border-radius: 28px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 184, 130, 0.08);
   min-height: calc(100vh - 144px);
 }
 
@@ -118,8 +119,8 @@ h1 {
 .game-root {
   position: relative;
   background:
-    radial-gradient(circle at top, rgba(118, 202, 255, 0.22), transparent 30%),
-    linear-gradient(180deg, #6ec4f4 0%, #aedff5 20%, #749360 20%, #5e7b4f 100%);
+    radial-gradient(circle at top, rgba(255, 176, 102, 0.22), transparent 30%),
+    linear-gradient(180deg, #f2b16a 0%, #da8c60 16%, #7f8260 17%, #59674a 100%);
 }
 
 .game-root canvas {
@@ -153,9 +154,24 @@ h1 {
   transition: opacity 220ms ease, visibility 220ms ease;
 }
 
-.start-overlay.is-hidden {
+.start-overlay.is-hidden,
+.end-overlay.is-hidden {
   opacity: 0;
   visibility: hidden;
+}
+
+.end-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 6;
+  background:
+    linear-gradient(140deg, rgba(6, 8, 12, 0.82), rgba(13, 18, 22, 0.52)),
+    radial-gradient(circle at 80% 18%, rgba(240, 106, 57, 0.28), transparent 30%);
+  backdrop-filter: blur(7px);
+  transition: opacity 220ms ease, visibility 220ms ease;
 }
 
 .start-card {
@@ -163,6 +179,10 @@ h1 {
   padding: 28px;
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(10, 14, 18, 0.96), rgba(24, 30, 37, 0.9));
+}
+
+.end-card {
+  max-width: 520px;
 }
 
 .start-title {
@@ -191,11 +211,18 @@ h1 {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.summary-grid {
+  margin-bottom: 24px;
+}
+
 .controls-grid span:nth-child(odd) {
   color: var(--accent-2);
   font-weight: 700;
 }
 
+.controls-card button,
+#restartButton,
+#muteButton,
 #startButton {
   border: 0;
   border-radius: 999px;
@@ -209,6 +236,15 @@ h1 {
   cursor: pointer;
 }
 
+#muteButton {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 0.92rem;
+}
+
+.controls-card button:hover,
+#restartButton:hover,
+#muteButton:hover,
 #startButton:hover {
   filter: brightness(1.04);
 }
@@ -248,6 +284,17 @@ h1 {
   margin-top: 8px;
 }
 
+#eventLine,
+#recentLine,
+#restartHint {
+  color: var(--muted);
+}
+
+#eventLine.pulse {
+  color: var(--accent-2);
+  text-shadow: 0 0 18px rgba(255, 200, 128, 0.22);
+}
+
 .compact p {
   display: flex;
   justify-content: space-between;
@@ -256,6 +303,14 @@ h1 {
 
 .telemetry p {
   justify-content: flex-start;
+}
+
+.controls-card {
+  gap: 10px;
+}
+
+.controls-card p {
+  display: block;
 }
 
 #statusLine.dead,

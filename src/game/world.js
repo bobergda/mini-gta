@@ -7,6 +7,7 @@ import {
   STREET_EDGE,
   WORLD_SIZE,
 } from "./constants.js";
+import { WORLD_THEME } from "./presentation.js";
 
 export function createRoadCenters(size = WORLD_SIZE, blockSize = BLOCK_SIZE) {
   const centers = [];
@@ -285,7 +286,11 @@ export function createWorld(rng = Math.random) {
   const buildings = [];
   const trees = [];
   const lamps = [];
-  const colors = ["#d85f4e", "#d9a24c", "#6f84e8", "#4d908e", "#c8553d", "#d8d174"];
+  const hydrants = [];
+  const bollards = [];
+  const signs = [];
+  const colors = WORLD_THEME.buildingPalette;
+  const roofs = WORLD_THEME.roofPalette;
 
   for (let xi = 0; xi < roadCenters.length - 1; xi += 1) {
     for (let zi = 0; zi < roadCenters.length - 1; zi += 1) {
@@ -309,12 +314,16 @@ export function createWorld(rng = Math.random) {
             d,
             h: 50 + rng() * 120,
             color: randomItem(colors, rng),
+            roofColor: randomItem(roofs, rng),
           });
         }
       }
 
       trees.push({ x: left + 24, z: top + 26, scale: 1 + rng() * 0.4 });
       trees.push({ x: right - 26, z: bottom - 24, scale: 0.9 + rng() * 0.5 });
+      hydrants.push({ x: left + 12, z: top + 10 });
+      bollards.push({ x: right - 16, z: top + 12, axis: "z" });
+      bollards.push({ x: left + 14, z: bottom - 12, axis: "x" });
     }
   }
 
@@ -325,6 +334,8 @@ export function createWorld(rng = Math.random) {
       lamps.push({ x: center + ROAD_WIDTH / 2 + SIDEWALK_WIDTH, z: offset });
       lamps.push({ x: offset, z: center - ROAD_WIDTH / 2 - SIDEWALK_WIDTH });
       lamps.push({ x: offset, z: center + ROAD_WIDTH / 2 + SIDEWALK_WIDTH });
+      signs.push({ x: center - ROAD_WIDTH / 2 - SIDEWALK_WIDTH - 8, z: offset + 16, axis: "z" });
+      signs.push({ x: offset + 16, z: center + ROAD_WIDTH / 2 + SIDEWALK_WIDTH + 8, axis: "x" });
     }
   }
 
@@ -336,6 +347,9 @@ export function createWorld(rng = Math.random) {
     buildings,
     trees,
     lamps,
+    hydrants,
+    bollards,
+    signs,
     roadWidth: ROAD_WIDTH,
     sidewalkWidth: SIDEWALK_WIDTH,
     laneOffset: LANE_OFFSET,

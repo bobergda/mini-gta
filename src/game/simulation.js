@@ -9,6 +9,12 @@ import {
 } from "./constants.js";
 import { HUD_CONFIG, OBJECTIVE_TEXT } from "./config.js";
 import {
+  calculateHeatBonus,
+  createDistrictEvent,
+  RUN_CONFIG,
+  summarizeRun,
+} from "./progression.js";
+import {
   angleLerp,
   cameraRelativeVector,
   clamp,
@@ -69,6 +75,7 @@ function createPickup(id, world, rng = Math.random) {
     z: spot.z,
     value: 60 + Math.floor(rng() * 220),
     bob: rng() * Math.PI * 2,
+    bonusTag: null,
   };
 }
 
@@ -121,6 +128,197 @@ function createPlayer(world) {
   };
 }
 
+function createRunState() {
+  return {
+    duration: RUN_CONFIG.duration,
+    timeRemaining: RUN_CONFIG.duration,
+    targetCash: RUN_CONFIG.targetCash,
+    heatBonus: 0,
+    eventBonus: 0,
+    score: 0,
+    summary: null,
+    result: null,
+    targetReached: false,
+    districtEvent: null,
+    districtEventCooldown: 5,
+  };
+}
+
+function emitEvent(state, type, data = {}) {
+  state.events.push({
+    type,
+    time: state.time,
+    ...data,
+  });
+}
+
+function setRecentEvent(state, label) {
+  state.feedback.recentEvent = label;
+  state.feedback.recentEventTimer = 2.8;
+  state.feedback.eventPulse = 1;
+}
+
+function syncRunScore(state) {
+  state.run.score = Math.round(
+    state.player.cash + state.run.heatBonus + state.run.eventBonus,
+  );
+}
+
+function awardEventBonus(state, amount, label = OBJECTIVE_TEXT.eventComplete) {
+  state.run.eventBonus += amount;
+  syncRunScore(state);
+  state.objective = label;
+  setRecentEvent(state, `Event bonus +$${Math.round(amount)}`);
+  emitEvent(state, "district_event_completed", { amount });
+}
+
+function clearPickupBonusTag(state, pickupId) {
+  const pickup = state.pickups.find((candidate) => candidate.id === pickupId);
+  if (pickup) {
+    pickup.bonusTag = null;
+  }
+}
+
+function finishDistrictEvent(state, success) {
+  const activeEvent = state.run.districtEvent;
+  if (!activeEvent) return;
+
+  if (activeEvent.type === "highValuePickup" && activeEvent.pickupId != null) {
+    clearPickupBonusTag(state, activeEvent.pickupId);
+  }
+
+  state.run.districtEvent = null;
+  state.run.districtEventCooldown = RUN_CONFIG.eventCooldown;
+
+  if (!success) {
+    state.objective = OBJECTIVE_TEXT.eventFailed;
+    setRecentEvent(state, "Okazja przepadla");
+    emitEvent(state, "district_event_failed");
+  }
+}
+
+function startDistrictEvent(state, rng = Math.random) {
+  if (state.run.districtEvent || state.gameOver) return;
+
+  const options = [];
+  if (state.pickups.length > 0) {
+    options.push("highValuePickup");
+  }
+  if (state.time > 16) {
+    options.push("courierRun");
+  }
+  if (state.player.wanted > 0) {
+    options.push("heatSprint");
+  }
+
+  if (options.length === 0) return;
+
+  const type = options[Math.floor(rng() * options.length)];
+
+  if (type === "highValuePickup") {
+    const pickup = state.pickups[Math.floor(rng() * state.pickups.length)];
+    if (!pickup) return;
+    pickup.bonusTag = "highValue";
+    state.run.districtEvent = createDistrictEvent("highValuePickup", {
+      pickupId: pickup.id,
+      reward: RUN_CONFIG.highValueBonus,
+      duration: 32,
+    });
+    state.objective = OBJECTIVE_TEXT.eventHighValue;
+    setRecentEvent(state, "Nowy cynk z ulicy");
+  } else if (type === "courierRun") {
+    state.run.districtEvent = createDistrictEvent("courierRun", {
+      reward: RUN_CONFIG.courierBonus,
+      required: RUN_CONFIG.courierDuration,
+      duration: 38,
+      minSpeed: RUN_CONFIG.courierSpeedThreshold,
+    });
+    state.objective = OBJECTIVE_TEXT.eventCourier;
+    setRecentEvent(state, "Kurier pod presja czasu");
+  } else if (type === "heatSprint") {
+    state.run.districtEvent = createDistrictEvent("heatSprint", {
+      reward: RUN_CONFIG.heatSprintBonus,
+      required: RUN_CONFIG.heatSprintDuration,
+      duration: 28,
+    });
+    state.objective = OBJECTIVE_TEXT.eventHeat;
+    setRecentEvent(state, "Goraca strefa aktywna");
+  }
+
+  emitEvent(state, "district_event_started", { eventType: type });
+}
+
+function updateDistrictEvent(state, dt, rng = Math.random) {
+  const activeEvent = state.run.districtEvent;
+  if (!activeEvent) {
+    state.run.districtEventCooldown = Math.max(0, state.run.districtEventCooldown - dt);
+    if (state.run.districtEventCooldown === 0) {
+      startDistrictEvent(state, rng);
+    }
+    return;
+  }
+
+  activeEvent.duration = Math.max(0, activeEvent.duration - dt);
+
+  if (activeEvent.type === "highValuePickup") {
+    const pickupExists = state.pickups.some((pickup) => pickup.id === activeEvent.pickupId);
+    if (!pickupExists) {
+      awardEventBonus(state, activeEvent.reward);
+      finishDistrictEvent(state, true);
+      return;
+    }
+  }
+
+  if (activeEvent.type === "courierRun") {
+    if (
+      state.player.mode === "vehicle" &&
+      Math.abs(state.player.speed) >= activeEvent.minSpeed
+    ) {
+      activeEvent.progress += dt;
+    } else {
+      activeEvent.progress = Math.max(0, activeEvent.progress - dt * 0.45);
+    }
+
+    if (activeEvent.progress >= activeEvent.required) {
+      awardEventBonus(state, activeEvent.reward);
+      finishDistrictEvent(state, true);
+      return;
+    }
+  }
+
+  if (activeEvent.type === "heatSprint") {
+    if (state.player.wanted > 0) {
+      activeEvent.progress += dt;
+    } else {
+      activeEvent.progress = Math.max(0, activeEvent.progress - dt * 0.7);
+    }
+
+    if (activeEvent.progress >= activeEvent.required) {
+      awardEventBonus(state, activeEvent.reward, OBJECTIVE_TEXT.heatBonus);
+      finishDistrictEvent(state, true);
+      return;
+    }
+  }
+
+  if (activeEvent.duration === 0) {
+    finishDistrictEvent(state, false);
+  }
+}
+
+function finishRun(state, result, objective) {
+  if (state.gameOver) return;
+  syncRunScore(state);
+  state.run.result = result;
+  state.run.summary = summarizeRun(state.run, state.player.cash);
+  state.running = false;
+  state.gameOver = true;
+  state.objective = objective;
+  setRecentEvent(state, result === "time_up" ? "Timer dobiegl do zera" : "Run zakonczony");
+  emitEvent(state, result === "time_up" ? "time_up" : "game_over", {
+    score: state.run.summary.score,
+  });
+}
+
 export function createGameState(world, rng = Math.random) {
   let nextId = 2;
   const vehicles = [];
@@ -152,13 +350,24 @@ export function createGameState(world, rng = Math.random) {
     pedestrians,
     pickups,
     projectiles: [],
+    events: [],
+    run: createRunState(),
     feedback: {
       damageFlash: 0,
       damageNotice: 0,
       damageShake: 0,
       damageSource: "collision",
+      eventPulse: 0,
+      recentEvent: "",
+      recentEventTimer: 0,
     },
   };
+}
+
+export function drainFrameEvents(state) {
+  const snapshot = [...state.events];
+  state.events.length = 0;
+  return snapshot;
 }
 
 function getVehicleById(state, id) {
@@ -250,6 +459,8 @@ function tryToggleVehicle(state) {
     vehicle.vx = 0;
     vehicle.vz = 0;
     state.objective = OBJECTIVE_TEXT.onFootHint;
+    setRecentEvent(state, "Zmieniono tempo: pieszo");
+    emitEvent(state, "vehicle_exited");
     return;
   }
 
@@ -270,6 +481,8 @@ function tryToggleVehicle(state) {
     best.ai = "player";
     best.speed = Math.max(best.speed, 0);
     state.objective = OBJECTIVE_TEXT.vehicleHint;
+    setRecentEvent(state, "Auto przejete");
+    emitEvent(state, "vehicle_entered", { vehicleId: best.id });
   }
 }
 
@@ -304,12 +517,22 @@ function resetActiveEntity(state) {
     player.invuln = Math.max(player.invuln, 0.6);
     updatePlayerFromVehicle(state);
     state.objective = OBJECTIVE_TEXT.vehicleReset;
+    setRecentEvent(state, "Auto ustawione na trase");
     return;
   }
 
   resetPlayerToSpawn(player, state.world);
   player.invuln = Math.max(player.invuln, 0.45);
   state.objective = OBJECTIVE_TEXT.playerReset;
+  setRecentEvent(state, "Powrot na start dzielnicy");
+}
+
+function changeWanted(state, amount, cooldown) {
+  const before = state.player.wanted;
+  addWanted(state.player, amount, cooldown);
+  if (state.player.wanted > before) {
+    emitEvent(state, "wanted_increased", { amount: state.player.wanted - before });
+  }
 }
 
 function registerPlayerDamage(state, amount, source, invuln = 0.35) {
@@ -322,13 +545,28 @@ function registerPlayerDamage(state, amount, source, invuln = 0.35) {
   state.feedback.damageNotice = Math.max(state.feedback.damageNotice, 0.38);
   state.feedback.damageShake = Math.max(state.feedback.damageShake, 0.35 + amount / 48);
   state.feedback.damageSource = source;
+  emitEvent(state, amount >= 12 ? "collision_heavy" : "damage_taken", {
+    source,
+    amount,
+  });
   return true;
 }
 
 function decayFeedback(state, dt) {
-  state.feedback.damageFlash = Math.max(0, state.feedback.damageFlash - dt * HUD_CONFIG.damageFlashFade);
-  state.feedback.damageNotice = Math.max(0, state.feedback.damageNotice - dt * HUD_CONFIG.damageNoticeFade);
+  state.feedback.damageFlash = Math.max(
+    0,
+    state.feedback.damageFlash - dt * HUD_CONFIG.damageFlashFade,
+  );
+  state.feedback.damageNotice = Math.max(
+    0,
+    state.feedback.damageNotice - dt * HUD_CONFIG.damageNoticeFade,
+  );
   state.feedback.damageShake = Math.max(0, state.feedback.damageShake - dt * 4.6);
+  state.feedback.eventPulse = Math.max(0, state.feedback.eventPulse - dt * HUD_CONFIG.eventPulseFade);
+  state.feedback.recentEventTimer = Math.max(0, state.feedback.recentEventTimer - dt);
+  if (state.feedback.recentEventTimer === 0) {
+    state.feedback.recentEvent = "";
+  }
 }
 
 function findVehicleBlocker(vehicle, state) {
@@ -365,8 +603,16 @@ function recoverPlayerVehicleIfStuck(state, dt) {
   if (vehicle.stuckTimer < 0.7 || vehicle.recoveryCooldown > 0) return;
 
   const nudge = 3 + Math.abs(vehicle.steerInput ?? 0) * 0.9;
-  vehicle.x = clamp(vehicle.x + blocker.x * nudge, -state.world.streetEdge, state.world.streetEdge);
-  vehicle.z = clamp(vehicle.z + blocker.z * nudge, -state.world.streetEdge, state.world.streetEdge);
+  vehicle.x = clamp(
+    vehicle.x + blocker.x * nudge,
+    -state.world.streetEdge,
+    state.world.streetEdge,
+  );
+  vehicle.z = clamp(
+    vehicle.z + blocker.z * nudge,
+    -state.world.streetEdge,
+    state.world.streetEdge,
+  );
   vehicle.vx = blocker.x * 4.5;
   vehicle.vz = blocker.z * 4.5;
   vehicle.speed = projectLocalVelocity(vehicle.heading, vehicle.vx, vehicle.vz).forward;
@@ -374,6 +620,7 @@ function recoverPlayerVehicleIfStuck(state, dt) {
   vehicle.recoveryCooldown = 1.1;
   player.invuln = Math.max(player.invuln, 0.2);
   state.objective = OBJECTIVE_TEXT.recovery;
+  setRecentEvent(state, "Przebicie z korka");
 }
 
 function updateVehicles(state, world, input, dt, rng = Math.random) {
@@ -398,6 +645,16 @@ function updateVehicles(state, world, input, dt, rng = Math.random) {
   }
 }
 
+function updateRunScore(state, dt) {
+  state.run.heatBonus += calculateHeatBonus(state.player.wanted, dt);
+  syncRunScore(state);
+  if (!state.run.targetReached && state.run.score >= state.run.targetCash) {
+    state.run.targetReached = true;
+    state.objective = OBJECTIVE_TEXT.runTarget;
+    setRecentEvent(state, "Target finansowy osiagniety");
+  }
+}
+
 function updatePickups(state, world, dt, rng = Math.random) {
   const anchor = getPlayerAnchor(state);
   for (let index = state.pickups.length - 1; index >= 0; index -= 1) {
@@ -407,6 +664,18 @@ function updatePickups(state, world, dt, rng = Math.random) {
       state.player.cash += pickup.value;
       state.pickups.splice(index, 1);
       state.objective = OBJECTIVE_TEXT.pickup;
+      setRecentEvent(state, `Pickup +$${pickup.value}`);
+      emitEvent(state, "pickup_collected", {
+        value: pickup.value,
+        bonusTag: pickup.bonusTag,
+      });
+      if (
+        state.run.districtEvent?.type === "highValuePickup" &&
+        state.run.districtEvent.pickupId === pickup.id
+      ) {
+        awardEventBonus(state, state.run.districtEvent.reward);
+        finishDistrictEvent(state, true);
+      }
     }
   }
   refillPickups(state, world, rng);
@@ -439,8 +708,9 @@ function handleCollisions(state, dt) {
       ) {
         ped.alive = false;
         player.cash += 40;
-        addWanted(player, 1, 18);
+        changeWanted(state, 1, 18);
         state.objective = OBJECTIVE_TEXT.pedHit;
+        setRecentEvent(state, "Cywil potracony: presja rosnie");
       }
     }
   }
@@ -469,8 +739,7 @@ function handleCollisions(state, dt) {
   player.invuln = Math.max(0, player.invuln - dt);
   player.health = clamp(player.health, 0, 100);
   if (player.health === 0) {
-    state.gameOver = true;
-    state.objective = OBJECTIVE_TEXT.gameOver;
+    finishRun(state, "destroyed", OBJECTIVE_TEXT.gameOver);
   }
 }
 
@@ -688,7 +957,13 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   if (!state.running || state.gameOver) return;
 
   state.time += dt;
+  state.run.timeRemaining = Math.max(0, state.run.timeRemaining - dt);
   decayFeedback(state, dt);
+
+  if (state.run.timeRemaining === 0) {
+    finishRun(state, "time_up", OBJECTIVE_TEXT.timeUp);
+    return;
+  }
 
   if (input.consumeAnyPress(["r"])) {
     resetActiveEntity(state);
@@ -710,9 +985,15 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   updateCombat(state, input, cameraController, dt, rng);
   updatePickups(state, world, dt, rng);
   handleCollisions(state, dt);
+  if (state.gameOver) {
+    return;
+  }
+
   recoverPlayerVehicleIfStuck(state, dt);
   refreshDeadPeds(state, world, rng);
   updatePolicePresence(state, world, dt, rng);
+  updateDistrictEvent(state, dt, rng);
+  updateRunScore(state, dt);
 
   if (state.player.mode === "vehicle" && state.player.vehicleId != null) {
     const vehicle = getVehicleById(state, state.player.vehicleId);

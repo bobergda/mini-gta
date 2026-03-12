@@ -8,14 +8,21 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Scene } from "@babylonjs/core/scene";
+import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
 import "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import "@babylonjs/core/Shaders/default.vertex";
 import "@babylonjs/core/Shaders/default.fragment";
+import { WORLD_THEME } from "./presentation.js";
 
 const TEMP_TARGET = new Vector3();
 const CHARACTER_HEADING_OFFSET = -Math.PI / 2;
+const DEFAULT_QUALITY = {
+  hardwareScale: 1,
+  glowIntensity: 0.32,
+  enableShadows: true,
+};
 
 function hash2(x, z) {
   const seed = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453123;
@@ -81,6 +88,60 @@ function disposeNode(node) {
   node.dispose(false);
   for (const material of materials) {
     material.dispose(false, true);
+  }
+}
+
+function setupAtmosphere(scene, world, quality) {
+  const tone = WORLD_THEME.skyTop;
+  const clearColor = Color4.FromHexString(tone);
+  scene.clearColor = new Color4(clearColor.r, clearColor.g, clearColor.b, 1);
+  scene.fogMode = Scene.FOGMODE_LINEAR;
+  scene.fogColor = Color3.FromHexString(WORLD_THEME.fogColor);
+  scene.fogStart = WORLD_THEME.fogStart;
+  scene.fogEnd = world.size * (WORLD_THEME.fogEndFactor ?? 0.75);
+  scene.environmentIntensity = 0.9;
+  scene.imageProcessingConfiguration.toneMappingEnabled = true;
+  scene.imageProcessingConfiguration.exposure = 1.05;
+  scene.imageProcessingConfiguration.contrast = 1.08;
+  if (quality?.enableShadows) {
+    scene.autoClear = true;
+  }
+}
+
+function createPropMaterial(scene, color, options = {}) {
+  return createMaterial(scene, color, { emissiveColor: color, emissiveIntensity: 0.6, disableLighting: true, ...options });
+}
+
+function createHydrant(scene, position) {
+  const material = createPropMaterial(scene, WORLD_THEME.hydrantColor);
+  const body = MeshBuilder.CreateCylinder("hydrant-body", { diameterTop: 0.18, diameterBottom: 0.22, height: 1.1, tessellation: 12 }, scene);
+  body.material = material;
+  body.position.set(position.x, 0.55, position.z);
+  const cap = MeshBuilder.CreateBox("hydrant-cap", { width: 0.35, height: 0.15, depth: 0.35 }, scene);
+  cap.material = material;
+  cap.position.set(position.x, 1.1, position.z);
+}
+
+function createBollard(scene, position) {
+  const material = createPropMaterial(scene, WORLD_THEME.bollardColor);
+  const pole = MeshBuilder.CreateCylinder("bollard", { diameterTop: 0.22, diameterBottom: 0.22, height: 0.9, tessellation: 6 }, scene);
+  pole.material = material;
+  pole.position.set(position.x, 0.45, position.z);
+  const cap = MeshBuilder.CreateBox("bollard-cap", { width: 0.3, height: 0.08, depth: 0.3 }, scene);
+  cap.material = material;
+  cap.position.set(position.x, 0.9, position.z);
+}
+
+function createSign(scene, position) {
+  const mat = createPropMaterial(scene, WORLD_THEME.signAccent);
+  const board = MeshBuilder.CreateBox("sign-board", { width: 0.36, height: 0.22, depth: 0.04 }, scene);
+  board.material = mat;
+  board.position.set(position.x, 1.75, position.z);
+  const pole = MeshBuilder.CreateBox("sign-pole", { width: 0.08, height: 1.6, depth: 0.08 }, scene);
+  pole.material = createPropMaterial(scene, WORLD_THEME.bollardColor);
+  pole.position.set(position.x, 0.8, position.z);
+  if (position.axis === "z") {
+    board.rotation.y = Math.PI / 2;
   }
 }
 
@@ -280,12 +341,12 @@ function createVehicleMesh(scene, color, police = false) {
     barBase.parent = root;
 
     const blueMat = createMaterial(scene, "#93c5fd", {
-      emissiveColor: "#3b82f6",
+      emissiveColor: WORLD_THEME.policeBlue,
       emissiveIntensity: 0.6,
       specularPower: 100,
     });
     const redMat = createMaterial(scene, "#fca5a5", {
-      emissiveColor: "#ef4444",
+      emissiveColor: WORLD_THEME.policeRed,
       emissiveIntensity: 0.6,
       specularPower: 100,
     });
@@ -300,7 +361,19 @@ function createVehicleMesh(scene, color, police = false) {
     rightPod.position.set(-0.26, 2.45, 0);
     rightPod.parent = root;
 
-    root.metadata = { sirenMaterials: [blueMat, redMat], wheels };
+    const glowMat = createMaterial(scene, WORLD_THEME.policeBlue, {
+      emissiveColor: WORLD_THEME.policeBlue,
+      emissiveIntensity: 0.25,
+      specularPower: 2,
+      disableLighting: true,
+    });
+    const glow = MeshBuilder.CreateCylinder("siren-glow", { diameterTop: 3.4, diameterBottom: 2.6, height: 0.03, tessellation: 26 }, scene);
+    glow.material = glowMat;
+    glow.position.set(0, 0.05, 0);
+    glow.rotation.x = Math.PI / 2;
+    glow.parent = root;
+
+    root.metadata = { sirenMaterials: [blueMat, redMat], wheels, sirenGlow: glow };
   } else {
     root.metadata = { wheels };
   }
@@ -316,8 +389,8 @@ function createPickupMesh(scene) {
     { diameterTop: 1.08, diameterBottom: 1.08, height: 0.18, tessellation: 20 },
     scene,
   );
-  ring.material = createMaterial(scene, "#fbbf24", {
-    emissiveColor: "#f59e0b",
+  ring.material = createMaterial(scene, WORLD_THEME.pickupGlow, {
+    emissiveColor: WORLD_THEME.pickupGlow,
     emissiveIntensity: 0.42,
     specularPower: 80,
   });
@@ -325,7 +398,7 @@ function createPickupMesh(scene) {
   ring.parent = root;
 
   const coreMaterial = createMaterial(scene, "#fde68a", {
-    emissiveColor: "#fde047",
+    emissiveColor: WORLD_THEME.pickupGlow,
     emissiveIntensity: 0.55,
     specularPower: 120,
   });
@@ -333,7 +406,7 @@ function createPickupMesh(scene) {
   core.material = coreMaterial;
   core.parent = root;
 
-  root.metadata = { coreMaterial };
+  root.metadata = { coreMaterial, ringMaterial: ring.material };
   return root;
 }
 
@@ -351,8 +424,8 @@ function createProjectileMesh(scene, projectile) {
 }
 
 function createRoadMarkings(scene, center, worldSize, vertical) {
-  const markMaterial = createMaterial(scene, "#f8f7e5", {
-    emissiveColor: "#fdfdf3",
+  const markMaterial = createMaterial(scene, WORLD_THEME.laneColor, {
+    emissiveColor: WORLD_THEME.laneColor,
     emissiveIntensity: 0.08,
     specularPower: 8,
   });
@@ -428,23 +501,18 @@ function addBuildingWindows(scene, building) {
   }
 }
 
-function buildStaticWorld(scene, world) {
-  const background = Color3.FromHexString("#87cfff");
-  scene.clearColor = new Color4(background.r, background.g, background.b, 1);
-  scene.fogMode = Scene.FOGMODE_LINEAR;
-  scene.fogColor = Color3.FromHexString("#bfdff1");
-  scene.fogStart = 180;
-  scene.fogEnd = world.size * 0.82;
+function buildStaticWorld(scene, world, quality) {
+  setupAtmosphere(scene, world, quality);
 
-  const grassMaterial = createMaterial(scene, "#5d8b54", {
-    specularColor: "#2f4a2f",
+  const grassMaterial = createMaterial(scene, WORLD_THEME.grassColor, {
+    specularColor: WORLD_THEME.groundShadowColor,
     specularPower: 12,
   });
   const ground = MeshBuilder.CreateBox("ground", { width: world.size, height: 2, depth: world.size }, scene);
   ground.material = grassMaterial;
   ground.position.y = -1;
 
-  const ringMaterial = createMaterial(scene, "#2f3a2f", { specularPower: 8 });
+  const ringMaterial = createMaterial(scene, WORLD_THEME.ringWallColor, { specularPower: 8 });
   const wallThickness = 10;
   const wallHeight = 8;
   const half = world.size / 2;
@@ -461,15 +529,15 @@ function buildStaticWorld(scene, world) {
   west.material = ringMaterial;
   west.position.set(-half, wallHeight / 2 - 1, 0);
 
-  const roadMaterial = createMaterial(scene, "#2b3139", {
-    specularColor: "#111827",
+  const roadMaterial = createMaterial(scene, WORLD_THEME.roadColor, {
+    specularColor: WORLD_THEME.roadEdgeColor,
     specularPower: 18,
   });
-  const sidewalkMaterial = createMaterial(scene, "#c9c2af", {
-    specularColor: "#7c7465",
+  const sidewalkMaterial = createMaterial(scene, WORLD_THEME.sidewalkColor, {
+    specularColor: WORLD_THEME.curbColor,
     specularPower: 20,
   });
-  const curbMaterial = createMaterial(scene, "#9f9888", { specularPower: 10 });
+  const curbMaterial = createMaterial(scene, WORLD_THEME.curbColor, { specularPower: 10 });
 
   for (const center of world.roadCenters) {
     const vertical = MeshBuilder.CreateBox(
@@ -557,7 +625,7 @@ function buildStaticWorld(scene, world) {
       { width: building.w * 0.92, height: 1.2, depth: building.d * 0.92 },
       scene,
     );
-    roof.material = createMaterial(scene, "#374151", { specularPower: 10 });
+    roof.material = createMaterial(scene, building.roofColor ?? WORLD_THEME.roofPalette[0], { specularPower: 10 });
     roof.position.set(building.x, building.h + 0.6, building.z);
 
     if (hash2(building.x, building.z) > 0.66) {
@@ -579,7 +647,7 @@ function buildStaticWorld(scene, world) {
       { diameterTop: 0.42, diameterBottom: 0.62, height: 2.8, tessellation: 8 },
       scene,
     );
-    trunk.material = createMaterial(scene, "#6f4b2c", { specularPower: 10 });
+    trunk.material = createMaterial(scene, WORLD_THEME.treeTrunk, { specularPower: 10 });
     trunk.position.set(tree.x, 1.4, tree.z);
 
     const lower = MeshBuilder.CreateSphere(
@@ -587,7 +655,7 @@ function buildStaticWorld(scene, world) {
       { diameter: 2.8 * tree.scale, segments: 10 },
       scene,
     );
-    lower.material = createMaterial(scene, "#3f8d5d", { specularPower: 8 });
+    lower.material = createMaterial(scene, WORLD_THEME.treeLeafDark, { specularPower: 8 });
     lower.position.set(tree.x, 3, tree.z);
 
     const upper = MeshBuilder.CreateSphere(
@@ -595,7 +663,7 @@ function buildStaticWorld(scene, world) {
       { diameter: 2.15 * tree.scale, segments: 9 },
       scene,
     );
-    upper.material = createMaterial(scene, "#4d9f68", { specularPower: 8 });
+    upper.material = createMaterial(scene, WORLD_THEME.treeLeafLight, { specularPower: 8 });
     upper.position.set(tree.x, 4.2, tree.z + 0.1);
   }
 
@@ -605,15 +673,15 @@ function buildStaticWorld(scene, world) {
       { diameterTop: 0.12, diameterBottom: 0.18, height: 5.6, tessellation: 6 },
       scene,
     );
-    pole.material = createMaterial(scene, "#4b5563", { specularPower: 16 });
+    pole.material = createMaterial(scene, WORLD_THEME.lampMetal, { specularPower: 16 });
     pole.position.set(lamp.x, 2.8, lamp.z);
 
     const arm = MeshBuilder.CreateBox("lamp-arm", { width: 0.14, height: 0.14, depth: 1.1 }, scene);
-    arm.material = createMaterial(scene, "#4b5563", { specularPower: 16 });
+    arm.material = createMaterial(scene, WORLD_THEME.lampMetal, { specularPower: 16 });
     arm.position.set(lamp.x, 5.25, lamp.z + 0.42);
 
     const bulbMaterial = createMaterial(scene, "#fff7d6", {
-      emissiveColor: "#ffd166",
+      emissiveColor: WORLD_THEME.lampGlow,
       emissiveIntensity: 0.95,
       specularPower: 120,
     });
@@ -626,14 +694,18 @@ function buildStaticWorld(scene, world) {
       { diameterTop: 3.8, diameterBottom: 3.2, height: 0.04, tessellation: 22 },
       scene,
     );
-    pool.material = createMaterial(scene, "#fef3c7", {
-      emissiveColor: "#f59e0b",
-      emissiveIntensity: 0.14,
+    pool.material = createMaterial(scene, WORLD_THEME.lampPool, {
+      emissiveColor: WORLD_THEME.lampGlow,
+      emissiveIntensity: 0.38,
       alpha: 0.18,
       specularPower: 1,
     });
     pool.position.set(lamp.x, 0.04, lamp.z + 0.9);
   }
+
+  (world.hydrants ?? []).forEach((hydrant) => createHydrant(scene, hydrant));
+  (world.bollards ?? []).forEach((bollard) => createBollard(scene, bollard));
+  (world.signs ?? []).forEach((sign) => createSign(scene, sign));
 }
 
 function syncEntityMap(collection, map, factory) {
@@ -651,7 +723,7 @@ function syncEntityMap(collection, map, factory) {
   }
 }
 
-function createRendererFacade(root) {
+function createRendererFacade(root, quality = DEFAULT_QUALITY) {
   const canvas = document.createElement("canvas");
   canvas.className = "game-canvas";
   canvas.tabIndex = 0;
@@ -659,7 +731,8 @@ function createRendererFacade(root) {
 
   const engine = new Engine(canvas, true, undefined, true);
   const maxPixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-  engine.setHardwareScalingLevel(1 / maxPixelRatio);
+  const scaling = Math.max(0.5, Math.min(2, quality.hardwareScale ?? DEFAULT_QUALITY.hardwareScale));
+  engine.setHardwareScalingLevel(1 / (maxPixelRatio * scaling));
 
   return {
     engine,
@@ -686,8 +759,9 @@ function createCameraProxy(aspect) {
   };
 }
 
-export function createSceneView(root, world, state) {
-  const { engine, renderer } = createRendererFacade(root);
+export function createSceneView(root, world, state, quality = DEFAULT_QUALITY) {
+  const resolvedQuality = { ...DEFAULT_QUALITY, ...quality };
+  const { engine, renderer } = createRendererFacade(root, resolvedQuality);
   const scene = new Scene(engine);
   scene.useRightHandedSystem = true;
 
@@ -713,7 +787,11 @@ export function createSceneView(root, world, state) {
   rim.diffuse = Color3.FromHexString("#c6e6ff");
   rim.intensity = 0.38;
 
-  buildStaticWorld(scene, world);
+  buildStaticWorld(scene, world, resolvedQuality);
+  const glow = resolvedQuality.enableShadows ? new GlowLayer("scene-glow", scene) : null;
+  if (glow) {
+    glow.intensity = resolvedQuality.glowIntensity;
+  }
 
   const dynamic = {
     player: createCharacterMesh(scene, "#f8e5c1", "#9f7aea", true),
@@ -736,11 +814,31 @@ export function createSceneView(root, world, state) {
     dynamic.projectiles.set(projectile.id, createProjectileMesh(scene, projectile));
   }
 
-  return { scene, camera, nativeCamera, renderer, dynamic };
+  const skidMaterial = createMaterial(scene, "#dcd2b3", {
+    emissiveColor: "#f7e7c1",
+    emissiveIntensity: 0.45,
+    disableLighting: true,
+    alpha: 0.42,
+  });
+  const skidDust = MeshBuilder.CreateCylinder("skid-dust", { diameterTop: 1.4, diameterBottom: 0.5, height: 0.02, tessellation: 18 }, scene);
+  skidDust.material = skidMaterial;
+  skidDust.position.y = 0.02;
+  skidDust.rotation.x = Math.PI / 2;
+  skidDust.isVisible = false;
+  skidDust.renderingGroupId = 2;
+  skidDust.isPickable = false;
+
+  dynamic.skidDust = skidDust;
+
+  return { scene, camera, nativeCamera, renderer, dynamic, glowLayer: glow };
 }
 
 export function renderFrame(view, state, dt) {
   const { scene, camera, nativeCamera, dynamic } = view;
+  const playerVehicle =
+    state.player.vehicleId != null
+      ? state.vehicles.find((vehicle) => vehicle.id === state.player.vehicleId)
+      : null;
 
   syncEntityMap(state.vehicles, dynamic.vehicles, (vehicle) =>
     createVehicleMesh(scene, vehicle.color, vehicle.kind === "police"),
@@ -774,6 +872,15 @@ export function renderFrame(view, state, dt) {
       const phase = Math.sin(vehicle.sirenPhase);
       blueMat.emissiveColor = Color3.FromHexString("#3b82f6").scale(phase > 0 ? 1.8 : 0.3);
       redMat.emissiveColor = Color3.FromHexString("#ef4444").scale(phase <= 0 ? 1.8 : 0.3);
+      const glow = mesh.metadata?.sirenGlow;
+      if (glow?.material) {
+        const pulse = Math.max(0.4, 0.6 + Math.abs(Math.sin(vehicle.sirenPhase)) * 0.8);
+        glow.scaling.x = 0.8 + pulse;
+        glow.scaling.z = 0.8 + pulse;
+        const mix = Math.sin(vehicle.sirenPhase * 0.9);
+        const color = Color3.FromHexString(mix > 0 ? WORLD_THEME.policeBlue : WORLD_THEME.policeRed).scale(0.5 + Math.abs(mix) * 0.5);
+        glow.material.emissiveColor = color;
+      }
     }
   }
 
@@ -792,10 +899,39 @@ export function renderFrame(view, state, dt) {
     const bobY = pickup.y + Math.sin(pickup.bob) * 0.45;
     mesh.position.copyFromFloats(pickup.x, bobY, pickup.z);
     mesh.rotation.y += dt * 1.35;
+    const highlight = pickup.bonusTag ? 1.24 : 1;
+    mesh.scaling.set(highlight, highlight, highlight);
+    if (mesh.metadata?.ringMaterial) {
+      mesh.metadata.ringMaterial.emissiveColor = Color3.FromHexString(WORLD_THEME.pickupGlow).scale(
+        pickup.bonusTag ? 1.9 : 0.95,
+      );
+    }
 
     if (mesh.metadata?.coreMaterial) {
       const glow = 0.4 + (Math.sin(pickup.bob * 1.3) + 1) * 0.32;
-      mesh.metadata.coreMaterial.emissiveColor = Color3.FromHexString("#fde047").scale(glow);
+      mesh.metadata.coreMaterial.emissiveColor = Color3.FromHexString(WORLD_THEME.pickupGlow).scale(glow);
+      if (pickup.bonusTag) {
+        mesh.metadata.coreMaterial.emissiveColor = Color3.FromHexString(WORLD_THEME.pickupGlow).scale(
+          glow * 1.45,
+        );
+      }
+    }
+  }
+
+  if (dynamic.skidDust) {
+    const skid = dynamic.skidDust;
+    const brake = Math.abs(playerVehicle?.brakeInput ?? 0);
+    const slip = Math.max(0, playerVehicle?.slip ?? 0);
+    const shouldShow = playerVehicle && (brake > 0.22 || slip > 0.25);
+    if (shouldShow) {
+      skid.position.x = playerVehicle.x;
+      skid.position.z = playerVehicle.z;
+      skid.rotation.y = -playerVehicle.heading;
+      skid.scaling.x = 1 + slip * 1.8;
+      skid.scaling.z = 1 + brake * 1.4;
+      skid.isVisible = true;
+    } else {
+      skid.isVisible = false;
     }
   }
 

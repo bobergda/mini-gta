@@ -50,6 +50,23 @@
           </div>
         </section>
 
+        <section class="end-overlay is-hidden" id="endOverlay">
+          <div class="start-card end-card">
+            <p class="eyebrow" data-ui="endOverlay.eyebrow">RUN SUMMARY</p>
+            <h2 class="start-title end-title" id="endTitle">Miasto cie dogonilo</h2>
+            <p class="start-lede" id="endLead" data-ui="endOverlay.summaryLead">
+              Jeszcze jeden wjazd i mozna podbic wynik.
+            </p>
+            <div class="controls-grid summary-grid">
+              <span data-ui="endOverlay.scoreLabel">Wynik</span><span id="endScore">0</span>
+              <span data-ui="endOverlay.cashLabel">Gotowka</span><span id="endCash">0</span>
+              <span data-ui="endOverlay.heatLabel">Heat bonus</span><span id="endHeat">0</span>
+              <span data-ui="endOverlay.eventLabel">Event bonus</span><span id="endEvent">0</span>
+            </div>
+            <button type="button" id="restartButton" data-ui="endOverlay.retryButton">Jeszcze jeden run</button>
+          </div>
+        </section>
+
         <aside class="overlay left">
           <div class="card">
             <h2 data-ui="hud.objectiveTitle">Cel</h2>
@@ -57,6 +74,7 @@
               Ukradnij auto, zbieraj paczki i utrzymaj się przy życiu podczas
               pościgu.
             </p>
+            <p id="eventLine">Lokalne radio szuka nastepnej okazji</p>
           </div>
           <div class="card">
             <h2 data-ui="hud.controlsTitle">Sterowanie</h2>
@@ -78,6 +96,7 @@
             <p id="cashLine">Gotówka: $0</p>
             <p id="wantedLine">Pościg: -----</p>
             <p id="healthLine">Zdrowie: 100</p>
+            <p id="recentLine">Ostatni impuls: ---</p>
           </div>
           <div class="card compact telemetry">
             <h2 data-ui="hud.districtTitle">Dzielnica</h2>
@@ -85,6 +104,16 @@
             <p data-speed-line>Prędkość: 0 km/h</p>
             <p data-traffic-line>Ruch: 0</p>
             <p data-fps-line>FPS: 0</p>
+            <p data-timer-line>Czas: 4:00</p>
+            <p data-score-line>Wynik: 0</p>
+            <p data-target-line>Target: 2400</p>
+            <p data-bonus-line>Heat bonus: 0</p>
+          </div>
+          <div class="card compact controls-card">
+            <h2 data-ui="hud.audioTitle">Audio</h2>
+            <p id="audioLine">Audio: OFF</p>
+            <button type="button" id="muteButton">Wlacz</button>
+            <p id="restartHint">R restartuje run po porazce</p>
           </div>
         </aside>
       </main>

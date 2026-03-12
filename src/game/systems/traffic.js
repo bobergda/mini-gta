@@ -13,7 +13,7 @@ import {
   nextNode,
 } from "../world.js";
 
-const VEHICLE_COLORS = ["#ff7b54", "#e8b949", "#4db6ac", "#5874dc", "#ef5350", "#8e7dff"];
+const VEHICLE_COLORS = ["#c86d55", "#b89f58", "#58758e", "#5b6f86", "#9d5f55", "#7d6e63"];
 const VEHICLE_HALF_LENGTH = 2.1;
 const VEHICLE_HALF_WIDTH = 1.08;
 
@@ -30,6 +30,8 @@ function createVehicleBase(id, kind, ai, data) {
     sirenPhase: 0,
     throttleInput: 0,
     steerInput: 0,
+    brakeInput: 0,
+    slip: 0,
     stuckTimer: 0,
     recoveryCooldown: 0,
     ...data,
@@ -314,6 +316,8 @@ export function updatePlayerVehicle(vehicle, world, input, dt) {
   vehicle.speed = forwardSpeed;
   vehicle.throttleInput = throttle;
   vehicle.steerInput = steer;
+  vehicle.brakeInput = braking ? 1 : 0;
+  vehicle.slip = Math.abs(lateralSpeed * sideSlip) + Math.abs(steer) * speedRatio * 0.18;
   vehicle.x += vehicle.vx * dt;
   vehicle.z += vehicle.vz * dt;
   vehicle.x = Math.max(-world.streetEdge, Math.min(world.streetEdge, vehicle.x));

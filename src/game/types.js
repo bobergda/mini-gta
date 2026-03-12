@@ -72,7 +72,7 @@
  *   shirt:string
  * }} PedestrianState
  *
- * @typedef {{id:number, x:number, y:number, z:number, value:number, bob:number}} PickupState
+ * @typedef {{id:number, x:number, y:number, z:number, value:number, bob:number, bonusTag:string|null}} PickupState
  * @typedef {{
  *   id:number,
  *   owner:"player"|"npc",
@@ -91,9 +91,12 @@
  *   size:number,
  *   roadCenters:number[],
  *   sidewalkGuides:number[],
- *   buildings:Array<{x:number,z:number,w:number,d:number,h:number,color:string}>,
+ *   buildings:Array<{x:number,z:number,w:number,d:number,h:number,color:string,roofColor:string}>,
  *   trees:Array<{x:number,z:number,scale:number}>,
  *   lamps:Array<{x:number,z:number}>,
+ *   hydrants:Array<{x:number,z:number}>,
+ *   bollards:Array<{x:number,z:number,axis:"x"|"z"}>,
+ *   signs:Array<{x:number,z:number,axis:"x"|"z"}>,
  *   roadWidth:number,
  *   sidewalkWidth:number,
  *   laneOffset:number,
