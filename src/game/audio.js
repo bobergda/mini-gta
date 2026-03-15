@@ -2,6 +2,38 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function createNoiseBuffer(context, durationSeconds = 1.2) {
+  const size = Math.max(1, Math.floor(context.sampleRate * durationSeconds));
+  const buffer = context.createBuffer(1, size, context.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let index = 0; index < size; index += 1) {
+    data[index] = Math.random() * 2 - 1;
+  }
+
+  return buffer;
+}
+
+function createImpulseBuffer(context, durationSeconds = 0.45, decay = 4.4) {
+  const size = Math.max(1, Math.floor(context.sampleRate * durationSeconds));
+  const buffer = context.createBuffer(2, size, context.sampleRate);
+
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < size; index += 1) {
+      const t = index / size;
+      const envelope = Math.pow(1 - t, decay);
+      data[index] = (Math.random() * 2 - 1) * envelope;
+    }
+  }
+
+  return buffer;
+}
+
 export function createAudioSystem(windowRef) {
   const AudioContextRef = windowRef.AudioContext || windowRef.webkitAudioContext;
   if (!AudioContextRef) {
@@ -14,26 +46,96 @@ export function createAudioSystem(windowRef) {
   }
 
   let context = null;
-  let masterGain = null;
   let started = false;
+
+  let masterGain = null;
+  let mixBus = null;
+  let sfxBus = null;
+  let engineBus = null;
+  let ambientBus = null;
+  let reverbSend = null;
+  let noiseBuffer = null;
+
+  let engineNodes = null;
+  let ambienceNodes = null;
+  let sirenNodes = null;
+
   let lastHealth = 100;
   let lastCash = 0;
   let lastWanted = 0;
   let lastGameOver = false;
+  let lastVehicleSpeed = 0;
   let projectileIds = new Set();
-  const cooldowns = new Map();
 
-  let engineOsc = null;
-  let engineGain = null;
+  const cooldowns = new Map();
+  let engineRpm = 0.2;
 
   function ensureContext() {
     if (context) return true;
 
     try {
       context = new AudioContextRef();
+      noiseBuffer = createNoiseBuffer(context, 1.5);
+
+      mixBus = context.createGain();
+      mixBus.gain.value = 0.95;
+
+      sfxBus = context.createGain();
+      sfxBus.gain.value = 0.95;
+
+      engineBus = context.createGain();
+      engineBus.gain.value = 0.85;
+
+      ambientBus = context.createGain();
+      ambientBus.gain.value = 0.65;
+
+      reverbSend = context.createGain();
+      reverbSend.gain.value = 0.25;
+
+      const reverb = context.createConvolver();
+      reverb.buffer = createImpulseBuffer(context);
+      const reverbReturn = context.createGain();
+      reverbReturn.gain.value = 0.5;
+
+      const lowShelf = context.createBiquadFilter();
+      lowShelf.type = "lowshelf";
+      lowShelf.frequency.value = 180;
+      lowShelf.gain.value = 2.8;
+
+      const highShelf = context.createBiquadFilter();
+      highShelf.type = "highshelf";
+      highShelf.frequency.value = 3200;
+      highShelf.gain.value = 1.9;
+
+      const compressor = context.createDynamicsCompressor();
+      compressor.threshold.value = -25;
+      compressor.knee.value = 16;
+      compressor.ratio.value = 8;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.14;
+
       masterGain = context.createGain();
-      masterGain.gain.value = 0.22;
+      masterGain.gain.value = 0.24;
+
+      sfxBus.connect(mixBus);
+      engineBus.connect(mixBus);
+      ambientBus.connect(mixBus);
+
+      sfxBus.connect(reverbSend);
+      reverbSend.connect(reverb);
+      reverb.connect(reverbReturn);
+      reverbReturn.connect(mixBus);
+
+      mixBus.connect(lowShelf);
+      lowShelf.connect(highShelf);
+      highShelf.connect(compressor);
+      compressor.connect(masterGain);
       masterGain.connect(context.destination);
+
+      buildEngineLoop();
+      buildAmbienceLoop();
+      buildSirenLoop();
+
       return true;
     } catch {
       return false;
@@ -44,175 +146,552 @@ export function createAudioSystem(windowRef) {
     return context.currentTime;
   }
 
+  function smoothParam(param, value, speed = 0.04) {
+    param.setTargetAtTime(value, now(), speed);
+  }
+
   function allowEvent(name, interval) {
-    const timestamp = now();
-    const nextAllowed = cooldowns.get(name) ?? 0;
-    if (timestamp < nextAllowed) return false;
-    cooldowns.set(name, timestamp + interval);
+    const time = now();
+    const next = cooldowns.get(name) ?? 0;
+    if (time < next) return false;
+    cooldowns.set(name, time + interval);
     return true;
+  }
+
+  function connectWithPan(sourceNode, outputNode, pan = 0) {
+    if (typeof context.createStereoPanner === "function") {
+      const panner = context.createStereoPanner();
+      panner.pan.value = clamp(pan, -1, 1);
+      sourceNode.connect(panner);
+      panner.connect(outputNode);
+      return;
+    }
+
+    sourceNode.connect(outputNode);
+  }
+
+  function createEnvelope({ attack = 0.003, hold = 0.04, release = 0.09, gain = 0.12 }) {
+    const envelope = context.createGain();
+    const t0 = now();
+    envelope.gain.setValueAtTime(0.0001, t0);
+    envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), t0 + attack);
+    envelope.gain.exponentialRampToValueAtTime(
+      Math.max(0.0001, gain * 0.75),
+      t0 + attack + hold,
+    );
+    envelope.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + hold + release);
+    return envelope;
   }
 
   function playTone({
     frequency,
-    duration = 0.08,
-    type = "square",
-    gain = 0.12,
-    attack = 0.003,
+    endFrequency = null,
+    type = "sawtooth",
+    gain = 0.11,
+    duration = 0.09,
+    attack = 0.002,
     release = 0.08,
     detune = 0,
-    endFrequency = null,
+    pan = 0,
+    filterType = null,
+    filterFrequency = 1400,
+    filterQ = 0.8,
+    output = sfxBus,
   }) {
-    if (!context || !masterGain) return;
+    if (!context || !output) return;
 
-    const timestamp = now();
+    const t0 = now();
     const oscillator = context.createOscillator();
-    const envelope = context.createGain();
-
     oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, timestamp);
-    oscillator.detune.setValueAtTime(detune, timestamp);
+    oscillator.frequency.setValueAtTime(Math.max(20, frequency), t0);
+    oscillator.detune.setValueAtTime(detune, t0);
+
     if (typeof endFrequency === "number") {
-      oscillator.frequency.exponentialRampToValueAtTime(
-        Math.max(20, endFrequency),
-        timestamp + duration,
-      );
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), t0 + duration);
     }
 
-    envelope.gain.setValueAtTime(0.0001, timestamp);
-    envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), timestamp + attack);
-    envelope.gain.exponentialRampToValueAtTime(
-      0.0001,
-      timestamp + Math.max(duration, attack + release),
-    );
+    const envelope = createEnvelope({
+      attack,
+      hold: Math.max(0, duration - attack),
+      release,
+      gain,
+    });
 
-    oscillator.connect(envelope);
-    envelope.connect(masterGain);
+    if (filterType) {
+      const filter = context.createBiquadFilter();
+      filter.type = filterType;
+      filter.frequency.setValueAtTime(filterFrequency, t0);
+      filter.Q.setValueAtTime(filterQ, t0);
+      oscillator.connect(filter);
+      filter.connect(envelope);
+    } else {
+      oscillator.connect(envelope);
+    }
 
-    oscillator.start(timestamp);
-    oscillator.stop(timestamp + Math.max(duration, attack + release) + 0.01);
+    connectWithPan(envelope, output, pan);
+
+    oscillator.start(t0);
+    oscillator.stop(t0 + duration + release + 0.03);
   }
 
-  function playNoise({ duration = 0.06, gain = 0.08 }) {
-    if (!context || !masterGain) return;
+  function playNoise({
+    duration = 0.08,
+    gain = 0.09,
+    pan = 0,
+    filterType = "bandpass",
+    filterFrequency = 1200,
+    filterQ = 0.8,
+    output = sfxBus,
+  }) {
+    if (!context || !noiseBuffer || !output) return;
 
-    const sampleRate = context.sampleRate;
-    const size = Math.max(1, Math.floor(sampleRate * duration));
-    const buffer = context.createBuffer(1, size, sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let index = 0; index < size; index += 1) {
-      data[index] = (Math.random() * 2 - 1) * (1 - index / size);
-    }
-
+    const t0 = now();
     const source = context.createBufferSource();
+    source.buffer = noiseBuffer;
+
     const filter = context.createBiquadFilter();
-    const envelope = context.createGain();
-    const timestamp = now();
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(filterFrequency, t0);
+    filter.Q.setValueAtTime(filterQ, t0);
 
-    source.buffer = buffer;
-    filter.type = "bandpass";
-    filter.frequency.setValueAtTime(1200, timestamp);
-    filter.Q.setValueAtTime(0.85, timestamp);
-
-    envelope.gain.setValueAtTime(0.0001, timestamp);
-    envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), timestamp + 0.004);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, timestamp + duration + 0.02);
+    const envelope = createEnvelope({
+      attack: 0.001,
+      hold: duration * 0.68,
+      release: 0.05,
+      gain,
+    });
 
     source.connect(filter);
     filter.connect(envelope);
-    envelope.connect(masterGain);
-    source.start(timestamp);
-    source.stop(timestamp + duration + 0.03);
+    connectWithPan(envelope, output, pan);
+
+    source.start(t0);
+    source.stop(t0 + duration + 0.07);
+  }
+
+  function buildEngineLoop() {
+    if (!context || engineNodes) return;
+
+    const baseOsc = context.createOscillator();
+    baseOsc.type = "sawtooth";
+
+    const bodyOsc = context.createOscillator();
+    bodyOsc.type = "triangle";
+
+    const whineOsc = context.createOscillator();
+    whineOsc.type = "square";
+
+    const baseGain = context.createGain();
+    baseGain.gain.value = 0.0001;
+    const bodyGain = context.createGain();
+    bodyGain.gain.value = 0.0001;
+    const whineGain = context.createGain();
+    whineGain.gain.value = 0.0001;
+
+    const preFilter = context.createBiquadFilter();
+    preFilter.type = "lowpass";
+    preFilter.frequency.value = 520;
+
+    const bodyFilter = context.createBiquadFilter();
+    bodyFilter.type = "bandpass";
+    bodyFilter.frequency.value = 980;
+    bodyFilter.Q.value = 0.8;
+
+    const whineFilter = context.createBiquadFilter();
+    whineFilter.type = "bandpass";
+    whineFilter.frequency.value = 2100;
+    whineFilter.Q.value = 1.1;
+
+    const drive = context.createWaveShaper();
+    drive.curve = new Float32Array(1024);
+    for (let index = 0; index < drive.curve.length; index += 1) {
+      const x = (index / (drive.curve.length - 1)) * 2 - 1;
+      drive.curve[index] = Math.tanh(x * 1.8);
+    }
+    drive.oversample = "2x";
+
+    const postGain = context.createGain();
+    postGain.gain.value = 0.46;
+
+    baseOsc.connect(preFilter);
+    preFilter.connect(baseGain);
+
+    bodyOsc.connect(bodyFilter);
+    bodyFilter.connect(bodyGain);
+
+    whineOsc.connect(whineFilter);
+    whineFilter.connect(whineGain);
+
+    baseGain.connect(drive);
+    bodyGain.connect(drive);
+    whineGain.connect(drive);
+    drive.connect(postGain);
+    postGain.connect(engineBus);
+
+    const roadNoiseSource = context.createBufferSource();
+    roadNoiseSource.buffer = noiseBuffer;
+    roadNoiseSource.loop = true;
+    const roadNoiseFilter = context.createBiquadFilter();
+    roadNoiseFilter.type = "highpass";
+    roadNoiseFilter.frequency.value = 500;
+    const roadNoiseGain = context.createGain();
+    roadNoiseGain.gain.value = 0.0001;
+    roadNoiseSource.connect(roadNoiseFilter);
+    roadNoiseFilter.connect(roadNoiseGain);
+    roadNoiseGain.connect(engineBus);
+
+    const skidNoiseSource = context.createBufferSource();
+    skidNoiseSource.buffer = noiseBuffer;
+    skidNoiseSource.loop = true;
+    const skidFilter = context.createBiquadFilter();
+    skidFilter.type = "bandpass";
+    skidFilter.frequency.value = 1700;
+    skidFilter.Q.value = 1.15;
+    const skidGain = context.createGain();
+    skidGain.gain.value = 0.0001;
+    skidNoiseSource.connect(skidFilter);
+    skidFilter.connect(skidGain);
+    skidGain.connect(engineBus);
+
+    baseOsc.start();
+    bodyOsc.start();
+    whineOsc.start();
+    roadNoiseSource.start();
+    skidNoiseSource.start();
+
+    engineNodes = {
+      baseOsc,
+      bodyOsc,
+      whineOsc,
+      baseGain,
+      bodyGain,
+      whineGain,
+      preFilter,
+      bodyFilter,
+      whineFilter,
+      roadNoiseGain,
+      skidGain,
+    };
+  }
+
+  function buildAmbienceLoop() {
+    if (!context || ambienceNodes) return;
+
+    const lowHum = context.createOscillator();
+    lowHum.type = "sine";
+    lowHum.frequency.value = 82;
+
+    const lowHumGain = context.createGain();
+    lowHumGain.gain.value = 0.0001;
+
+    const cityNoise = context.createBufferSource();
+    cityNoise.buffer = noiseBuffer;
+    cityNoise.loop = true;
+    const cityBand = context.createBiquadFilter();
+    cityBand.type = "bandpass";
+    cityBand.frequency.value = 720;
+    cityBand.Q.value = 0.35;
+    const cityNoiseGain = context.createGain();
+    cityNoiseGain.gain.value = 0.0001;
+
+    lowHum.connect(lowHumGain);
+    lowHumGain.connect(ambientBus);
+
+    cityNoise.connect(cityBand);
+    cityBand.connect(cityNoiseGain);
+    cityNoiseGain.connect(ambientBus);
+
+    lowHum.start();
+    cityNoise.start();
+
+    ambienceNodes = {
+      lowHum,
+      lowHumGain,
+      cityNoiseGain,
+    };
+  }
+
+  function buildSirenLoop() {
+    if (!context || sirenNodes) return;
+
+    const toneA = context.createOscillator();
+    toneA.type = "triangle";
+    const toneB = context.createOscillator();
+    toneB.type = "sine";
+
+    const gainA = context.createGain();
+    gainA.gain.value = 0.0001;
+    const gainB = context.createGain();
+    gainB.gain.value = 0.0001;
+
+    const filterA = context.createBiquadFilter();
+    filterA.type = "bandpass";
+    filterA.frequency.value = 1200;
+    filterA.Q.value = 0.8;
+
+    const filterB = context.createBiquadFilter();
+    filterB.type = "bandpass";
+    filterB.frequency.value = 720;
+    filterB.Q.value = 0.6;
+
+    toneA.connect(filterA);
+    filterA.connect(gainA);
+    gainA.connect(ambientBus);
+
+    toneB.connect(filterB);
+    filterB.connect(gainB);
+    gainB.connect(ambientBus);
+
+    toneA.start();
+    toneB.start();
+
+    sirenNodes = {
+      toneA,
+      toneB,
+      gainA,
+      gainB,
+    };
   }
 
   function playPlayerShot() {
-    playNoise({ duration: 0.04, gain: 0.07 });
-    playTone({
-      frequency: 980,
-      endFrequency: 560,
+    const pan = randomBetween(-0.18, 0.18);
+    playNoise({
       duration: 0.08,
+      gain: 0.15,
+      pan,
+      filterType: "highpass",
+      filterFrequency: 1500,
+      filterQ: 0.92,
+    });
+
+    playTone({
+      frequency: 190,
+      endFrequency: 58,
+      type: "triangle",
+      duration: 0.11,
+      gain: 0.13,
+      release: 0.14,
+      pan,
+      filterType: "lowpass",
+      filterFrequency: 820,
+      filterQ: 0.72,
+    });
+
+    playTone({
+      frequency: 2600,
+      endFrequency: 980,
       type: "square",
-      gain: 0.08,
-      release: 0.09,
+      duration: 0.05,
+      attack: 0.0008,
+      gain: 0.05,
+      release: 0.05,
+      pan,
+      filterType: "bandpass",
+      filterFrequency: 2200,
+      filterQ: 1.2,
     });
   }
 
   function playEnemyShot() {
-    playNoise({ duration: 0.05, gain: 0.06 });
+    const pan = randomBetween(-0.5, 0.5);
+    playNoise({
+      duration: 0.07,
+      gain: 0.11,
+      pan,
+      filterType: "bandpass",
+      filterFrequency: 1300,
+      filterQ: 1.0,
+    });
+
     playTone({
-      frequency: 420,
-      endFrequency: 280,
-      duration: 0.1,
+      frequency: 145,
+      endFrequency: 62,
       type: "sawtooth",
-      gain: 0.05,
-      release: 0.1,
+      duration: 0.095,
+      gain: 0.09,
+      release: 0.11,
+      pan,
+      filterType: "lowpass",
+      filterFrequency: 670,
+      filterQ: 0.74,
     });
   }
 
   function playPickup() {
-    playTone({ frequency: 760, duration: 0.09, type: "triangle", gain: 0.06 });
-    playTone({ frequency: 1120, duration: 0.12, type: "triangle", gain: 0.05, attack: 0.01 });
+    playTone({
+      frequency: 760,
+      endFrequency: 900,
+      type: "triangle",
+      duration: 0.09,
+      gain: 0.055,
+      release: 0.09,
+      filterType: "highpass",
+      filterFrequency: 500,
+      filterQ: 0.4,
+    });
+    playTone({
+      frequency: 1080,
+      endFrequency: 1280,
+      type: "triangle",
+      duration: 0.1,
+      gain: 0.052,
+      release: 0.11,
+      filterType: "highpass",
+      filterFrequency: 700,
+      filterQ: 0.4,
+    });
+    playTone({
+      frequency: 1420,
+      endFrequency: 1670,
+      type: "triangle",
+      duration: 0.12,
+      gain: 0.05,
+      release: 0.12,
+      filterType: "highpass",
+      filterFrequency: 900,
+      filterQ: 0.35,
+    });
   }
 
   function playDamage() {
-    playNoise({ duration: 0.06, gain: 0.09 });
+    playNoise({
+      duration: 0.09,
+      gain: 0.12,
+      filterType: "lowpass",
+      filterFrequency: 950,
+      filterQ: 0.8,
+    });
+
     playTone({
       frequency: 210,
-      endFrequency: 120,
-      duration: 0.12,
+      endFrequency: 80,
       type: "square",
-      gain: 0.06,
-      release: 0.14,
+      duration: 0.15,
+      gain: 0.09,
+      release: 0.17,
+      filterType: "bandpass",
+      filterFrequency: 420,
+      filterQ: 0.95,
     });
   }
 
   function playWantedUp() {
-    playTone({ frequency: 540, duration: 0.11, type: "sine", gain: 0.05 });
-    playTone({ frequency: 760, duration: 0.13, type: "sine", gain: 0.05, attack: 0.01 });
+    playTone({ frequency: 540, endFrequency: 660, type: "sine", duration: 0.11, gain: 0.055, release: 0.1 });
+    playTone({ frequency: 740, endFrequency: 860, type: "sine", duration: 0.12, gain: 0.058, release: 0.12 });
+    playTone({ frequency: 610, endFrequency: 710, type: "sine", duration: 0.1, gain: 0.05, release: 0.1 });
   }
 
   function playGameOver() {
+    playNoise({
+      duration: 0.17,
+      gain: 0.09,
+      filterType: "lowpass",
+      filterFrequency: 620,
+      filterQ: 0.65,
+    });
+
     playTone({
-      frequency: 220,
-      endFrequency: 85,
-      duration: 0.55,
+      frequency: 240,
+      endFrequency: 74,
       type: "sawtooth",
-      gain: 0.08,
-      release: 0.5,
+      duration: 0.64,
+      gain: 0.11,
+      release: 0.62,
+      filterType: "lowpass",
+      filterFrequency: 560,
+      filterQ: 0.72,
     });
   }
 
-  function ensureEngineLoop() {
-    if (!context || !masterGain) return;
-    if (engineOsc && engineGain) return;
+  function updateEngineAndAmbience(state) {
+    if (!engineNodes || !ambienceNodes || !sirenNodes) return;
 
-    engineOsc = context.createOscillator();
-    engineGain = context.createGain();
-    engineOsc.type = "sawtooth";
-    engineOsc.frequency.setValueAtTime(55, now());
-    engineGain.gain.setValueAtTime(0.0001, now());
-    engineOsc.connect(engineGain);
-    engineGain.connect(masterGain);
-    engineOsc.start();
-  }
-
-  function updateEngine(state) {
-    if (!context || !started) return;
-    ensureEngineLoop();
-    if (!engineOsc || !engineGain) return;
-
-    const timestamp = now();
     const inVehicle = state.player.mode === "vehicle" && !state.gameOver;
-    const speed = Math.abs(state.player.speed || 0);
-    const targetFreq = inVehicle ? 52 + clamp(speed, 0, 45) * 4.3 : 45;
-    const targetGain = inVehicle ? 0.018 + clamp(speed / 45, 0, 1) * 0.06 : 0.0001;
+    const speed = clamp(Math.abs(state.player.speed || 0), 0, 58);
+    const speedNorm = speed / 58;
 
-    engineOsc.frequency.setTargetAtTime(targetFreq, timestamp, 0.03);
-    engineGain.gain.setTargetAtTime(targetGain, timestamp, inVehicle ? 0.04 : 0.09);
+    const speedDelta = speed - lastVehicleSpeed;
+    lastVehicleSpeed = speed;
+    const accel = clamp(speedDelta * 0.22, -1, 1);
+
+    const gearSteps = [0, 8, 18, 32, 46, 58];
+    let gear = 1;
+    while (gear < gearSteps.length - 1 && speed > gearSteps[gear]) {
+      gear += 1;
+    }
+    const low = gearSteps[Math.max(0, gear - 1)];
+    const high = gearSteps[Math.min(gearSteps.length - 1, gear)];
+    const gearRatio = high > low ? (speed - low) / (high - low) : 0;
+
+    const baseRpm = 0.24 + gear * 0.13 + gearRatio * 0.25;
+    const throttleBoost = accel > 0 ? accel * 0.16 : accel * 0.05;
+    const rpmTarget = clamp(baseRpm + throttleBoost, 0.2, 1.15);
+    const rpmSmoothing = inVehicle ? 0.04 : 0.09;
+    engineRpm += (rpmTarget - engineRpm) * clamp((1 / rpmSmoothing) * (1 / 60), 0.02, 0.35);
+
+    const steer = inVehicle
+      ? Math.abs(
+          state.vehicles.find((vehicle) => vehicle.id === state.player.vehicleId)?.steerInput ?? 0,
+        )
+      : 0;
+
+    const baseFreq = inVehicle ? 52 + engineRpm * 102 : 42;
+    const bodyFreq = inVehicle ? 98 + engineRpm * 225 : 90;
+    const whineFreq = inVehicle ? 320 + engineRpm * 1450 : 240;
+    const cutoff = inVehicle ? 620 + engineRpm * 2600 : 420;
+
+    const rumbleGain = inVehicle ? 0.024 + speedNorm * 0.035 : 0.0001;
+    const bodyGain = inVehicle ? 0.018 + speedNorm * 0.023 : 0.0001;
+    const whineGain = inVehicle ? 0.004 + Math.pow(speedNorm, 1.4) * 0.025 : 0.0001;
+
+    const roadNoiseGain = inVehicle ? 0.004 + speedNorm * 0.018 : 0.0001;
+    const skid = inVehicle ? clamp((speedNorm - 0.25) * steer * 2.2, 0, 1) : 0;
+    const skidGain = 0.0001 + skid * 0.02;
+
+    smoothParam(engineNodes.baseOsc.frequency, baseFreq, 0.035);
+    smoothParam(engineNodes.bodyOsc.frequency, bodyFreq, 0.038);
+    smoothParam(engineNodes.whineOsc.frequency, whineFreq, 0.04);
+
+    smoothParam(engineNodes.preFilter.frequency, cutoff, 0.05);
+    smoothParam(engineNodes.bodyFilter.frequency, 860 + engineRpm * 600, 0.05);
+    smoothParam(engineNodes.whineFilter.frequency, 1750 + engineRpm * 1300, 0.05);
+
+    smoothParam(engineNodes.baseGain.gain, rumbleGain, inVehicle ? 0.06 : 0.12);
+    smoothParam(engineNodes.bodyGain.gain, bodyGain, inVehicle ? 0.06 : 0.12);
+    smoothParam(engineNodes.whineGain.gain, whineGain, inVehicle ? 0.05 : 0.12);
+    smoothParam(engineNodes.roadNoiseGain.gain, roadNoiseGain, inVehicle ? 0.08 : 0.13);
+    smoothParam(engineNodes.skidGain.gain, skidGain, 0.05);
+
+    const ambientLevel = state.gameOver ? 0.0001 : inVehicle ? 0.0026 : 0.0042;
+    smoothParam(ambienceNodes.lowHumGain.gain, ambientLevel, 0.18);
+    smoothParam(ambienceNodes.cityNoiseGain.gain, ambientLevel * 1.6, 0.18);
+
+    const wanted = clamp(state.player.wanted || 0, 0, 5);
+    const sirenIntensity = wanted / 5;
+    const sirenTime = now() * (1.35 + sirenIntensity * 0.85);
+    const sweep = Math.sin(sirenTime * Math.PI * 2);
+
+    const sirenBase = 640 + sirenIntensity * 90;
+    const sirenRange = 220 + sirenIntensity * 130;
+
+    smoothParam(sirenNodes.toneA.frequency, sirenBase + sweep * sirenRange, 0.03);
+    smoothParam(
+      sirenNodes.toneB.frequency,
+      sirenBase * 0.54 + Math.sin((sirenTime + 0.23) * Math.PI * 2) * (sirenRange * 0.4),
+      0.04,
+    );
+
+    const sirenGainTarget =
+      state.gameOver || wanted === 0
+        ? 0.0001
+        : 0.006 + sirenIntensity * (inVehicle ? 0.017 : 0.013);
+    smoothParam(sirenNodes.gainA.gain, sirenGainTarget, 0.1);
+    smoothParam(sirenNodes.gainB.gain, sirenGainTarget * 0.72, 0.1);
   }
 
   function start(state = null) {
     if (!ensureContext()) return false;
+
     context.resume?.();
     started = true;
 
@@ -221,6 +700,7 @@ export function createAudioSystem(windowRef) {
       lastCash = state.player.cash;
       lastWanted = state.player.wanted;
       lastGameOver = state.gameOver;
+      lastVehicleSpeed = Math.abs(state.player.speed || 0);
       projectileIds = new Set((state.projectiles ?? []).map((projectile) => projectile.id));
     }
 
@@ -228,7 +708,11 @@ export function createAudioSystem(windowRef) {
   }
 
   function update(state) {
-    if (!started || !context || context.state !== "running") return;
+    if (!started || !context) return;
+    if (context.state !== "running") {
+      context.resume?.();
+      return;
+    }
 
     const currentProjectiles = new Set();
     for (const projectile of state.projectiles ?? []) {
@@ -236,24 +720,24 @@ export function createAudioSystem(windowRef) {
       if (projectileIds.has(projectile.id)) continue;
 
       if (projectile.owner === "player") {
-        if (allowEvent("player-shot", 0.03)) {
+        if (allowEvent("player-shot", 0.035)) {
           playPlayerShot();
         }
-      } else if (allowEvent("npc-shot", 0.05)) {
+      } else if (allowEvent("npc-shot", 0.045)) {
         playEnemyShot();
       }
     }
     projectileIds = currentProjectiles;
 
-    if (state.player.cash > lastCash && allowEvent("pickup", 0.03)) {
+    if (state.player.cash > lastCash && allowEvent("pickup", 0.05)) {
       playPickup();
     }
 
-    if (state.player.health < lastHealth - 0.01 && allowEvent("damage", 0.08)) {
+    if (state.player.health < lastHealth - 0.01 && allowEvent("damage", 0.09)) {
       playDamage();
     }
 
-    if (state.player.wanted > lastWanted && allowEvent("wanted-up", 0.2)) {
+    if (state.player.wanted > lastWanted && allowEvent("wanted-up", 0.22)) {
       playWantedUp();
     }
 
@@ -261,7 +745,7 @@ export function createAudioSystem(windowRef) {
       playGameOver();
     }
 
-    updateEngine(state);
+    updateEngineAndAmbience(state);
 
     lastHealth = state.player.health;
     lastCash = state.player.cash;
