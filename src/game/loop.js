@@ -10,6 +10,10 @@ export function createFrameCounter() {
 }
 
 export function advanceFrame(state, world, input, cameraController, frameCounter, dt) {
+  if (state.paused) {
+    return frameCounter.fps;
+  }
+
   updateGameState(state, world, input, cameraController, dt);
   updateCamera(cameraController, input, state, dt);
 

@@ -830,7 +830,7 @@ export function createSceneView(root, world, state, quality = DEFAULT_QUALITY) {
 
   dynamic.skidDust = skidDust;
 
-  return { scene, camera, nativeCamera, renderer, dynamic, glowLayer: glow };
+  return { engine, scene, camera, nativeCamera, renderer, dynamic, glowLayer: glow };
 }
 
 export function renderFrame(view, state, dt) {
@@ -946,4 +946,11 @@ export function renderFrame(view, state, dt) {
   nativeCamera.setTarget(TEMP_TARGET);
 
   scene.render();
+}
+
+export function disposeSceneView(view) {
+  view.glowLayer?.dispose?.();
+  view.scene?.dispose?.();
+  view.engine?.dispose?.();
+  view.renderer?.domElement?.remove?.();
 }

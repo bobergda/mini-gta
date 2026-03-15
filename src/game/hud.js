@@ -27,6 +27,7 @@ export function createHud(documentRef) {
     startButton: documentRef.getElementById("startButton"),
     restartButton: documentRef.getElementById("restartButton"),
     muteButton: documentRef.getElementById("muteButton"),
+    qualityButton: documentRef.getElementById("qualityButton"),
     districtName: documentRef.querySelector("[data-district-name]"),
     objective: documentRef.getElementById("objective"),
     eventLine: documentRef.getElementById("eventLine"),
@@ -44,6 +45,8 @@ export function createHud(documentRef) {
     targetLine: documentRef.querySelector("[data-target-line]"),
     bonusLine: documentRef.querySelector("[data-bonus-line]"),
     audioLine: documentRef.getElementById("audioLine"),
+    qualityLine: documentRef.getElementById("qualityLine"),
+    pauseHint: documentRef.getElementById("pauseHint"),
     restartHint: documentRef.getElementById("restartHint"),
     endTitle: documentRef.getElementById("endTitle"),
     endLead: documentRef.getElementById("endLead"),
@@ -108,6 +111,8 @@ export function syncHud(hud, state, telemetry = {}, text = UI_TEXT, options = {}
     ? state.gameOver
       ? text.hud.statusGameOver
       : text.hud.statusReady
+    : state.paused
+      ? text.hud.statusPaused
     : state.player.mode === "vehicle"
       ? `${text.hud.statusVehicle} | ${Math.round(state.player.x)}, ${Math.round(state.player.z)}`
       : `${text.hud.statusOnFoot} | ${Math.round(state.player.x)}, ${Math.round(state.player.z)}`;
@@ -129,6 +134,10 @@ export function syncHud(hud, state, telemetry = {}, text = UI_TEXT, options = {}
   hud.bonusLine.textContent = `${text.hud.bonusLabel}: ${Math.round(state.run.heatBonus)}`;
   hud.audioLine.textContent = options.muted ? text.hud.audioOff : text.hud.audioOn;
   hud.muteButton.textContent = options.muted ? text.hud.unmuteButton : text.hud.muteButton;
+  const qualityKey = `quality${(options.qualityName ?? "medium").slice(0, 1).toUpperCase()}${(options.qualityName ?? "medium").slice(1)}`;
+  hud.qualityLine.textContent = `${text.hud.qualityLabel}: ${text.hud[qualityKey] ?? options.qualityName ?? "MEDIUM"}`;
+  hud.qualityButton.textContent = text.hud.qualityButton;
+  hud.pauseHint.textContent = text.hud.pauseHint;
   hud.restartHint.textContent = text.hud.restartHint;
 
   if (hud.damageFlash) {

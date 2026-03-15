@@ -62,4 +62,22 @@ describe("frame loop", () => {
     expect(camera.lastLookAt).not.toBeNull();
     expect(frameCounter.fps).toBeGreaterThan(0);
   });
+
+  it("does not advance simulation while paused", () => {
+    const world = createWorld(() => 0.5);
+    const state = createGameState(world, () => 0.5);
+    const input = createFakeInput(["w"]);
+    const camera = createFakeCamera();
+    const controller = createCameraController(camera);
+    const frameCounter = createFrameCounter();
+
+    state.running = true;
+    state.paused = true;
+
+    advanceFrame(state, world, input, controller, frameCounter, 0.03);
+
+    expect(state.time).toBe(0);
+    expect(state.player.speed).toBe(0);
+    expect(camera.lastLookAt).toBeNull();
+  });
 });

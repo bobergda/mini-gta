@@ -342,6 +342,7 @@ export function createGameState(world, rng = Math.random) {
     nextId,
     time: 0,
     running: false,
+    paused: false,
     objective: OBJECTIVE_TEXT.intro,
     gameOver: false,
     world,
@@ -954,7 +955,7 @@ function refreshDeadPeds(state, world, rng = Math.random) {
 }
 
 export function updateGameState(state, world, input, cameraController, dt, rng = Math.random) {
-  if (!state.running || state.gameOver) return;
+  if (!state.running || state.gameOver || state.paused) return;
 
   state.time += dt;
   state.run.timeRemaining = Math.max(0, state.run.timeRemaining - dt);

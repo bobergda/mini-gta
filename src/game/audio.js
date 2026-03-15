@@ -1042,12 +1042,18 @@ export function syncAudio(controller, state, events = [], dt = 0.016) {
   const skidLevel = getSkidAudioLevel(activeVehicle);
   const nearestPolice = state.vehicles.find((vehicle) => vehicle.kind === "police") ?? null;
   const wantedMix = Math.min(1, state.player.wanted / 5);
+  const paused = Boolean(state.paused);
 
   setAudioParam(controller.layers.engineOsc.frequency, engineProfile.frequency, now);
   setAudioParam(controller.layers.engineFilter.frequency, engineProfile.filterFrequency, now);
-  setAudioParam(controller.layers.engineGain.gain, activeVehicle ? engineProfile.gain : 0.0001, now, 0.06);
+  setAudioParam(
+    controller.layers.engineGain.gain,
+    paused ? 0.0001 : activeVehicle ? engineProfile.gain : 0.0001,
+    now,
+    0.06,
+  );
 
-  setAudioParam(controller.layers.skidGain.gain, skidLevel || 0.0001, now, 0.04);
+  setAudioParam(controller.layers.skidGain.gain, paused ? 0.0001 : skidLevel || 0.0001, now, 0.04);
   setAudioParam(
     controller.layers.skidFilter.frequency,
     880 + Math.min(520, Math.abs(activeVehicle?.speed ?? 0) * 14),
@@ -1055,10 +1061,11 @@ export function syncAudio(controller, state, events = [], dt = 0.016) {
     0.04,
   );
 
-  const ambienceGain = state.running && !state.gameOver ? 0.028 + wantedMix * 0.014 + dt * 0.002 : 0.0001;
+  const ambienceGain =
+    state.running && !state.gameOver && !paused ? 0.028 + wantedMix * 0.014 + dt * 0.002 : 0.0001;
   setAudioParam(controller.layers.ambienceGain.gain, ambienceGain, now, 0.2);
 
-  if (nearestPolice && state.player.wanted > 0 && !state.gameOver) {
+  if (nearestPolice && state.player.wanted > 0 && !state.gameOver && !paused) {
     const sirenFreq = 720 + Math.sin(nearestPolice.sirenPhase) * 145;
     setAudioParam(controller.layers.sirenOsc.frequency, sirenFreq, now, 0.04);
     setAudioParam(controller.layers.sirenGain.gain, 0.018 + wantedMix * 0.045, now, 0.05);

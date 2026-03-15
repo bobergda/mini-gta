@@ -22,13 +22,16 @@ const hud = createHud(document);
 const input = createInput(window, root);
 const frameCounter = createFrameCounter();
 const audioController = createAudioController();
-const quality = getQualityPreset("medium");
+const qualityNames = ["low", "medium", "high"];
+let qualityName = "medium";
+let quality = getQualityPreset(qualityName);
 
 let sceneView = null;
 let renderFrame = null;
 let cameraController = null;
 let frameActive = false;
 let startRequested = false;
+let renderModule = null;
 
 applyHudText(hud);
 
@@ -42,11 +45,33 @@ function resize() {
 
 async function ensureSceneView() {
   if (sceneView && renderFrame && cameraController) return;
-  const renderModule = await import("./game/render.js");
+  renderModule ??= await import("./game/render.js");
   sceneView = renderModule.createSceneView(root, world, state, quality);
   renderFrame = renderModule.renderFrame;
   cameraController = createCameraController(sceneView.camera);
   resize();
+}
+
+async function rebuildSceneView() {
+  renderModule ??= await import("./game/render.js");
+  if (sceneView) {
+    renderModule.disposeSceneView?.(sceneView);
+    sceneView = null;
+  }
+  sceneView = renderModule.createSceneView(root, world, state, quality);
+  renderFrame = renderModule.renderFrame;
+  cameraController = createCameraController(sceneView.camera);
+  resize();
+  if (state.running || state.gameOver) {
+    sceneView.renderer.domElement.focus();
+  }
+}
+
+function syncHudView() {
+  syncHud(hud, state, { fps: frameCounter.fps }, undefined, {
+    muted: audioController.muted,
+    qualityName,
+  });
 }
 
 let previous = performance.now();
@@ -70,10 +95,11 @@ async function beginRun() {
 function resetRun() {
   state = createGameState(world);
   state.running = true;
+  state.paused = false;
   previous = performance.now();
   hideStartOverlay(hud);
   hideEndOverlay(hud);
-  syncHud(hud, state, { fps: frameCounter.fps }, undefined, { muted: audioController.muted });
+  syncHudView();
   syncAudio(audioController, state, [{ type: "run_started" }], 0);
 }
 
@@ -93,7 +119,15 @@ hud.restartButton?.addEventListener("click", () => {
 
 hud.muteButton?.addEventListener("click", () => {
   setMuted(audioController, !audioController.muted);
-  syncHud(hud, state, { fps: frameCounter.fps }, undefined, { muted: audioController.muted });
+  syncHudView();
+});
+
+hud.qualityButton?.addEventListener("click", async () => {
+  const currentIndex = qualityNames.indexOf(qualityName);
+  qualityName = qualityNames[(currentIndex + 1) % qualityNames.length];
+  quality = getQualityPreset(qualityName);
+  await rebuildSceneView();
+  syncHudView();
 });
 
 window.addEventListener("resize", resize);
@@ -102,19 +136,22 @@ function frame(now) {
   if (state.gameOver && input.consumeAnyPress(["r"])) {
     resetRun();
   }
+  if (state.running && !state.gameOver && input.consumeAnyPress(["p"])) {
+    state.paused = !state.paused;
+  }
 
   const dt = Math.min(0.033, (now - previous) / 1000);
   previous = now;
 
   advanceFrame(state, world, input, cameraController, frameCounter, dt);
   const events = drainFrameEvents(state);
-  syncHud(hud, state, { fps: frameCounter.fps }, undefined, { muted: audioController.muted });
-  renderFrame(sceneView, state, dt);
+  syncHudView();
+  renderFrame(sceneView, state, state.paused ? 0 : dt);
   syncAudio(audioController, state, events, dt);
   requestAnimationFrame(frame);
 }
 
-syncHud(hud, state, { fps: 0 }, undefined, { muted: audioController.muted });
+syncHudView();
 
 shell.addEventListener("contextmenu", (event) => {
   event.preventDefault();
