@@ -2,6 +2,7 @@ import { createInput } from "./game/input.js";
 import { createWorld } from "./game/world.js";
 import { createGameState } from "./game/simulation.js";
 import { createCameraController } from "./game/camera.js";
+import { createAudioSystem } from "./game/audio.js";
 import { applyHudText, createHud, hideStartOverlay, syncHud } from "./game/hud.js";
 import { advanceFrame, createFrameCounter } from "./game/loop.js";
 
@@ -12,6 +13,7 @@ const world = createWorld();
 const state = createGameState(world);
 const hud = createHud(document);
 const input = createInput(window, root);
+const audioSystem = createAudioSystem(window);
 const frameCounter = createFrameCounter();
 let sceneView = null;
 let renderFrame = null;
@@ -50,6 +52,7 @@ hud.startButton?.addEventListener(
     previous = performance.now();
     hideStartOverlay(hud);
     sceneView.renderer.domElement.focus();
+    audioSystem.start(state);
     if (!frameActive) {
       frameActive = true;
       requestAnimationFrame(frame);
@@ -65,6 +68,7 @@ function frame(now) {
   previous = now;
 
   advanceFrame(state, world, input, cameraController, frameCounter, dt);
+  audioSystem.update(state);
   syncHud(hud, state, { fps: frameCounter.fps });
   renderFrame(sceneView, state, dt);
   requestAnimationFrame(frame);

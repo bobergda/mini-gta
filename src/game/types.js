@@ -17,6 +17,7 @@
  *   wanted:number,
  *   wantedTimer:number,
  *   invuln:number,
+ *   fireCooldown:number,
  *   mode:"onfoot"|"vehicle",
  *   vehicleId:number|null
  * }} PlayerState
@@ -44,7 +45,8 @@
  *   throttleInput:number,
  *   steerInput:number,
  *   stuckTimer:number,
- *   recoveryCooldown:number
+ *   recoveryCooldown:number,
+ *   gunCooldown:number
  * }} VehicleState
  *
  * @typedef {{
@@ -64,11 +66,26 @@
  *   panic:number,
  *   panicHeading:number,
  *   alive:boolean,
+ *   hostile:boolean,
+ *   fireCooldown:number,
  *   tone:string,
  *   shirt:string
  * }} PedestrianState
  *
  * @typedef {{id:number, x:number, y:number, z:number, value:number, bob:number}} PickupState
+ * @typedef {{
+ *   id:number,
+ *   owner:"player"|"npc",
+ *   x:number,
+ *   y:number,
+ *   z:number,
+ *   vx:number,
+ *   vy:number,
+ *   vz:number,
+ *   life:number,
+ *   damage:number,
+ *   color:string
+ * }} ProjectileState
  *
  * @typedef {{
  *   size:number,

@@ -57,6 +57,7 @@ Current Godot controls mirror the web version:
 - `WASD` or arrow keys: move on foot / drive
 - `Shift`: sprint on foot
 - `E`: enter or exit a car
+- `left mouse click` or `F`: shoot (on foot)
 - `Space`: handbrake
 - `R`: reset active entity (and recover after game over)
 - mouse drag: rotate camera
@@ -79,10 +80,13 @@ npm run test
 - `WASD` or arrow keys: move on foot / drive
 - `Shift`: sprint on foot
 - `E`: enter or exit a car
+- `left mouse click` or `F`: shoot (on foot)
 - `Space`: handbrake
 - `R`: reset player or active vehicle position
 - mouse drag: rotate camera
 - mouse wheel: zoom camera
+
+Audio starts after pressing the start button (browser autoplay policy).
 
 ## Current gameplay
 
@@ -93,6 +97,7 @@ npm run test
 - pedestrians walking on sidewalks
 - cash pickups around the district
 - wanted level and police spawning
+- weapon combat with projectile fire (player and hostile NPCs)
 - sharper low-speed driving, tighter high-speed steering, and stuck recovery
 - oriented vehicle collisions with short hit reaction feedback
 - basic collisions, damage, and game over state

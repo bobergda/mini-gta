@@ -31,6 +31,35 @@ import {
 import { addWanted, advanceWanted, desiredPoliceCount } from "./systems/wanted.js";
 import { findPoliceSpawn, randomSidewalkSpot } from "./world.js";
 
+const COMBAT_CONFIG = {
+  player: {
+    cooldown: 0.18,
+    speed: 72,
+    damage: 38,
+    life: 1.25,
+    spread: 0.05,
+  },
+  police: {
+    cooldownMin: 0.48,
+    cooldownMax: 0.83,
+    speed: 56,
+    damageOnFoot: 10,
+    damageVehicle: 6,
+    life: 1.18,
+    spread: 0.14,
+    range: 56,
+  },
+  hostilePed: {
+    cooldownMin: 0.85,
+    cooldownMax: 1.4,
+    speed: 48,
+    damage: 7,
+    life: 1.1,
+    spread: 0.2,
+    range: 34,
+  },
+};
+
 function createPickup(id, world, rng = Math.random) {
   const spot = randomSidewalkSpot(world, rng);
   return {
@@ -40,6 +69,33 @@ function createPickup(id, world, rng = Math.random) {
     z: spot.z,
     value: 60 + Math.floor(rng() * 220),
     bob: rng() * Math.PI * 2,
+  };
+}
+
+function createProjectile(
+  id,
+  owner,
+  x,
+  y,
+  z,
+  heading,
+  speed,
+  damage,
+  life,
+  color,
+) {
+  return {
+    id,
+    owner,
+    x,
+    y,
+    z,
+    vx: Math.cos(heading) * speed,
+    vy: 0,
+    vz: Math.sin(heading) * speed,
+    life,
+    damage,
+    color,
   };
 }
 
@@ -59,6 +115,7 @@ function createPlayer(world) {
     wanted: 0,
     wantedTimer: 0,
     invuln: 0,
+    fireCooldown: 0,
     mode: "onfoot",
     vehicleId: null,
   };
@@ -94,6 +151,7 @@ export function createGameState(world, rng = Math.random) {
     vehicles,
     pedestrians,
     pickups,
+    projectiles: [],
     feedback: {
       damageFlash: 0,
       damageNotice: 0,
@@ -128,6 +186,7 @@ function resetPlayerToSpawn(player, world) {
   player.heading = world.playerSpawn.heading;
   player.moveHeading = world.playerSpawn.heading;
   player.speed = 0;
+  player.fireCooldown = 0;
 }
 
 function updateOnFoot(player, input, cameraController, world, dt) {
@@ -415,6 +474,188 @@ function handleCollisions(state, dt) {
   }
 }
 
+function firePlayerWeapon(state, input, cameraController, rng = Math.random) {
+  const player = state.player;
+  if (player.mode !== "onfoot") return;
+  if (player.fireCooldown > 0) return;
+  if (!input.consumeFire()) return;
+
+  const shotHeading =
+    (cameraController?.yaw ?? player.heading) +
+    (rng() - 0.5) * COMBAT_CONFIG.player.spread;
+  player.heading = shotHeading;
+  player.moveHeading = shotHeading;
+  player.fireCooldown = COMBAT_CONFIG.player.cooldown;
+
+  state.projectiles.push(
+    createProjectile(
+      state.nextId++,
+      "player",
+      player.x + Math.cos(shotHeading) * 1.25,
+      1.35,
+      player.z + Math.sin(shotHeading) * 1.25,
+      shotHeading,
+      COMBAT_CONFIG.player.speed,
+      COMBAT_CONFIG.player.damage,
+      COMBAT_CONFIG.player.life,
+      "#fde047",
+    ),
+  );
+
+  addWanted(player, 1, 14);
+  state.objective = OBJECTIVE_TEXT.weaponFire;
+}
+
+function updateNpcFire(state, dt, rng = Math.random) {
+  const target = getPlayerAnchor(state);
+
+  for (const police of state.vehicles) {
+    if (police.ai !== "police") continue;
+    police.gunCooldown = Math.max(0, (police.gunCooldown ?? 0) - dt);
+
+    const gap = distance2D(police.x, police.z, target.x, target.z);
+    if (gap > COMBAT_CONFIG.police.range || police.gunCooldown > 0) continue;
+
+    const aimHeading = Math.atan2(target.z - police.z, target.x - police.x);
+    const shotHeading = aimHeading + (rng() - 0.5) * COMBAT_CONFIG.police.spread;
+    state.projectiles.push(
+      createProjectile(
+        state.nextId++,
+        "npc",
+        police.x + Math.cos(shotHeading) * 2.3,
+        1.25,
+        police.z + Math.sin(shotHeading) * 2.3,
+        shotHeading,
+        COMBAT_CONFIG.police.speed,
+        state.player.mode === "vehicle"
+          ? COMBAT_CONFIG.police.damageVehicle
+          : COMBAT_CONFIG.police.damageOnFoot,
+        COMBAT_CONFIG.police.life,
+        "#fb7185",
+      ),
+    );
+    police.gunCooldown =
+      COMBAT_CONFIG.police.cooldownMin +
+      rng() * (COMBAT_CONFIG.police.cooldownMax - COMBAT_CONFIG.police.cooldownMin);
+  }
+
+  for (const ped of state.pedestrians) {
+    if (!ped.alive || !ped.hostile) continue;
+    ped.fireCooldown = Math.max(0, (ped.fireCooldown ?? 0) - dt);
+
+    const gap = distance2D(ped.x, ped.z, target.x, target.z);
+    if (gap > COMBAT_CONFIG.hostilePed.range || ped.fireCooldown > 0) continue;
+
+    const aimHeading = Math.atan2(target.z - ped.z, target.x - ped.x);
+    const shotHeading = aimHeading + (rng() - 0.5) * COMBAT_CONFIG.hostilePed.spread;
+    ped.heading = shotHeading;
+    state.projectiles.push(
+      createProjectile(
+        state.nextId++,
+        "npc",
+        ped.x + Math.cos(shotHeading) * 0.8,
+        1.2,
+        ped.z + Math.sin(shotHeading) * 0.8,
+        shotHeading,
+        COMBAT_CONFIG.hostilePed.speed,
+        COMBAT_CONFIG.hostilePed.damage,
+        COMBAT_CONFIG.hostilePed.life,
+        "#fb7185",
+      ),
+    );
+    ped.fireCooldown =
+      COMBAT_CONFIG.hostilePed.cooldownMin +
+      rng() * (COMBAT_CONFIG.hostilePed.cooldownMax - COMBAT_CONFIG.hostilePed.cooldownMin);
+  }
+}
+
+function updateProjectiles(state, dt) {
+  const target = getPlayerAnchor(state);
+  const playerVehicle =
+    state.player.mode === "vehicle" && state.player.vehicleId != null
+      ? getVehicleById(state, state.player.vehicleId)
+      : null;
+
+  for (let index = state.projectiles.length - 1; index >= 0; index -= 1) {
+    const projectile = state.projectiles[index];
+    projectile.x += projectile.vx * dt;
+    projectile.z += projectile.vz * dt;
+    projectile.life -= dt;
+
+    const outside =
+      Math.abs(projectile.x) > state.world.streetEdge + 24 ||
+      Math.abs(projectile.z) > state.world.streetEdge + 24;
+    if (projectile.life <= 0 || outside) {
+      state.projectiles.splice(index, 1);
+      continue;
+    }
+
+    if (projectile.owner === "player") {
+      let consumed = false;
+
+      for (const ped of state.pedestrians) {
+        if (!ped.alive) continue;
+        if (distance2D(projectile.x, projectile.z, ped.x, ped.z) > 1.1) continue;
+        ped.alive = false;
+        state.player.cash += 55;
+        addWanted(state.player, 1, 18);
+        state.objective = OBJECTIVE_TEXT.pedShot;
+        consumed = true;
+        break;
+      }
+
+      if (consumed) {
+        state.projectiles.splice(index, 1);
+        continue;
+      }
+
+      for (const vehicle of state.vehicles) {
+        if (playerVehicle && vehicle.id === playerVehicle.id) continue;
+        if (distance2D(projectile.x, projectile.z, vehicle.x, vehicle.z) > VEHICLE_RADIUS) continue;
+
+        vehicle.health -= projectile.damage * (vehicle.kind === "police" ? 0.9 : 0.75);
+        if (vehicle.health <= 0) {
+          vehicle.disabled = true;
+          vehicle.speed = 0;
+          vehicle.vx = 0;
+          vehicle.vz = 0;
+          vehicle.ai = vehicle.kind === "police" ? "police" : "parked";
+        }
+
+        if (vehicle.kind === "police") {
+          addWanted(state.player, 1, 20);
+          state.objective = OBJECTIVE_TEXT.policeShot;
+        } else {
+          state.objective = OBJECTIVE_TEXT.vehicleShot;
+        }
+
+        consumed = true;
+        break;
+      }
+
+      if (consumed) {
+        state.projectiles.splice(index, 1);
+      }
+      continue;
+    }
+
+    const hitRadius = state.player.mode === "vehicle" ? VEHICLE_RADIUS : PLAYER_RADIUS + 0.45;
+    if (distance2D(projectile.x, projectile.z, target.x, target.z) < hitRadius) {
+      if (registerPlayerDamage(state, projectile.damage, "gunfire", 0.22)) {
+        state.player.wantedTimer = Math.max(state.player.wantedTimer, 12);
+      }
+      state.projectiles.splice(index, 1);
+    }
+  }
+}
+
+function updateCombat(state, input, cameraController, dt, rng = Math.random) {
+  state.player.fireCooldown = Math.max(0, state.player.fireCooldown - dt);
+  firePlayerWeapon(state, input, cameraController, rng);
+  updateNpcFire(state, dt, rng);
+  updateProjectiles(state, dt);
+}
+
 function updatePolicePresence(state, world, dt, rng = Math.random) {
   advanceWanted(state.player, dt);
   const desired = desiredPoliceCount(state.player.wanted);
@@ -466,6 +707,7 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
   }
 
   updatePedestrians(state, world, dt, rng);
+  updateCombat(state, input, cameraController, dt, rng);
   updatePickups(state, world, dt, rng);
   handleCollisions(state, dt);
   recoverPlayerVehicleIfStuck(state, dt);

@@ -84,7 +84,7 @@ function disposeNode(node) {
   }
 }
 
-function createCharacterMesh(scene, tone, shirt) {
+function createCharacterMesh(scene, tone, shirt, armed = false) {
   const root = new TransformNode("character", scene);
 
   addBlobShadow(root, scene, 1.2, 0.28);
@@ -131,6 +131,14 @@ function createCharacterMesh(scene, tone, shirt) {
   rightArm.material = armMaterial;
   rightArm.position.set(0.54, 1.3, 0);
   rightArm.parent = root;
+
+  if (armed) {
+    const weapon = MeshBuilder.CreateBox("character-weapon", { width: 0.12, height: 0.12, depth: 0.5 }, scene);
+    weapon.material = createMaterial(scene, "#1f2937", { specularPower: 24 });
+    weapon.position.set(0.72, 1.08, 0.16);
+    weapon.rotation.x = Math.PI * 0.48;
+    weapon.parent = root;
+  }
 
   const head = MeshBuilder.CreateSphere("character-head", { diameter: 0.68, segments: 14 }, scene);
   head.material = createMaterial(scene, tone, { specularPower: 22 });
@@ -249,7 +257,7 @@ function createVehicleMesh(scene, color, police = false) {
       scene,
     );
     wheel.material = wheelMaterial;
-    wheel.rotation.z = Math.PI / 2;
+    wheel.rotation.x = Math.PI / 2;
     wheel.position.set(x, y, z);
     wheel.parent = root;
     wheels.push(wheel);
@@ -260,7 +268,7 @@ function createVehicleMesh(scene, color, police = false) {
       scene,
     );
     rim.material = rimMaterial;
-    rim.rotation.z = Math.PI / 2;
+    rim.rotation.x = Math.PI / 2;
     rim.position.set(x, y, z);
     rim.parent = root;
   }
@@ -326,6 +334,19 @@ function createPickupMesh(scene) {
   core.parent = root;
 
   root.metadata = { coreMaterial };
+  return root;
+}
+
+function createProjectileMesh(scene, projectile) {
+  const root = new TransformNode("projectile", scene);
+  const tint = projectile.color || (projectile.owner === "player" ? "#fde047" : "#fb7185");
+  const core = MeshBuilder.CreateSphere("projectile-core", { diameter: 0.18, segments: 8 }, scene);
+  core.material = createMaterial(scene, tint, {
+    emissiveColor: tint,
+    emissiveIntensity: projectile.owner === "player" ? 0.8 : 0.7,
+    specularPower: 120,
+  });
+  core.parent = root;
   return root;
 }
 
@@ -695,20 +716,24 @@ export function createSceneView(root, world, state) {
   buildStaticWorld(scene, world);
 
   const dynamic = {
-    player: createCharacterMesh(scene, "#f8e5c1", "#9f7aea"),
+    player: createCharacterMesh(scene, "#f8e5c1", "#9f7aea", true),
     vehicles: new Map(),
     pedestrians: new Map(),
     pickups: new Map(),
+    projectiles: new Map(),
   };
 
   for (const vehicle of state.vehicles) {
     dynamic.vehicles.set(vehicle.id, createVehicleMesh(scene, vehicle.color, vehicle.kind === "police"));
   }
   for (const ped of state.pedestrians) {
-    dynamic.pedestrians.set(ped.id, createCharacterMesh(scene, ped.tone, ped.shirt));
+    dynamic.pedestrians.set(ped.id, createCharacterMesh(scene, ped.tone, ped.shirt, ped.hostile));
   }
   for (const pickup of state.pickups) {
     dynamic.pickups.set(pickup.id, createPickupMesh(scene));
+  }
+  for (const projectile of state.projectiles ?? []) {
+    dynamic.projectiles.set(projectile.id, createProjectileMesh(scene, projectile));
   }
 
   return { scene, camera, nativeCamera, renderer, dynamic };
@@ -721,9 +746,12 @@ export function renderFrame(view, state, dt) {
     createVehicleMesh(scene, vehicle.color, vehicle.kind === "police"),
   );
   syncEntityMap(state.pedestrians, dynamic.pedestrians, (ped) =>
-    createCharacterMesh(scene, ped.tone, ped.shirt),
+    createCharacterMesh(scene, ped.tone, ped.shirt, ped.hostile),
   );
   syncEntityMap(state.pickups, dynamic.pickups, () => createPickupMesh(scene));
+  syncEntityMap(state.projectiles ?? [], dynamic.projectiles, (projectile) =>
+    createProjectileMesh(scene, projectile),
+  );
 
   dynamic.player.setEnabled(state.player.mode === "onfoot" && !state.gameOver);
   dynamic.player.position.copyFromFloats(state.player.x, 0, state.player.z);
@@ -738,7 +766,7 @@ export function renderFrame(view, state, dt) {
 
     const wheelSpin = vehicle.speed * dt * 0.55;
     for (const wheel of mesh.metadata?.wheels ?? []) {
-      wheel.rotation.x += wheelSpin;
+      wheel.rotation.z += wheelSpin;
     }
 
     if (vehicle.kind === "police" && mesh.metadata?.sirenMaterials) {
@@ -769,6 +797,12 @@ export function renderFrame(view, state, dt) {
       const glow = 0.4 + (Math.sin(pickup.bob * 1.3) + 1) * 0.32;
       mesh.metadata.coreMaterial.emissiveColor = Color3.FromHexString("#fde047").scale(glow);
     }
+  }
+
+  for (const projectile of state.projectiles ?? []) {
+    const mesh = dynamic.projectiles.get(projectile.id);
+    if (!mesh) continue;
+    mesh.position.copyFromFloats(projectile.x, projectile.y, projectile.z);
   }
 
   nativeCamera.position.copyFromFloats(camera.position.x, camera.position.y, camera.position.z);

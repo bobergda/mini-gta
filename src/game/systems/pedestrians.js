@@ -23,6 +23,8 @@ export function createPedestrian(id, world, rng = Math.random) {
     alive: true,
     tone: `hsl(${Math.floor(rng() * 40) + 20} 75% 78%)`,
     shirt: `hsl(${Math.floor(rng() * 360)} 68% 56%)`,
+    hostile: rng() < 0.14,
+    fireCooldown: rng() * 1.1,
   };
 }
 

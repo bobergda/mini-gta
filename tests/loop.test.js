@@ -25,6 +25,9 @@ function createFakeInput(keys = []) {
     consumeWheel() {
       return 0;
     },
+    consumeFire() {
+      return false;
+    },
   };
 }
 

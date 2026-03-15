@@ -3,6 +3,7 @@ export function createInput(targetWindow, domElement) {
   const pressed = new Set();
   const look = { x: 0, y: 0 };
   let wheel = 0;
+  let fireQueued = false;
   let dragging = false;
   const blockedKeys = new Set([
     "w",
@@ -14,6 +15,7 @@ export function createInput(targetWindow, domElement) {
     "arrowleft",
     "arrowright",
     "e",
+    "f",
     "r",
     " ",
     "shift",
@@ -26,6 +28,9 @@ export function createInput(targetWindow, domElement) {
     }
     if (!event.repeat) {
       pressed.add(key);
+      if (key === "f") {
+        fireQueued = true;
+      }
     }
     keys.add(key);
   });
@@ -37,10 +42,14 @@ export function createInput(targetWindow, domElement) {
   targetWindow.addEventListener("blur", () => {
     keys.clear();
     pressed.clear();
+    fireQueued = false;
     dragging = false;
   });
 
   domElement.addEventListener("pointerdown", (event) => {
+    if (event.button === 0) {
+      fireQueued = true;
+    }
     dragging = true;
     domElement.setPointerCapture?.(event.pointerId);
   });
@@ -101,6 +110,11 @@ export function createInput(targetWindow, domElement) {
       const snapshot = wheel;
       wheel = 0;
       return snapshot;
+    },
+    consumeFire() {
+      if (!fireQueued) return false;
+      fireQueued = false;
+      return true;
     },
   };
 }
