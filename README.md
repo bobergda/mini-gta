@@ -1,6 +1,9 @@
 # Harbor Heat
 
-A browser-based arcade-realist 3D chase sandbox built with `Babylon.js` and `Vite`.
+An arcade-realist 3D chase sandbox with two parallel tracks:
+
+- a browser build powered by `Babylon.js` + `Vite`
+- a native migration prototype in `Godot 4`
 
 The project combines on-foot exploration, car stealing, AI traffic,
 pedestrians, cash pickups, a wanted system, and police pursuit inside a
@@ -27,6 +30,13 @@ http://localhost:5173
 A parallel Godot prototype is available in `godot/` as a migration track from
 the browser build.
 
+Current Godot milestone:
+
+- procedural city blockout with darker road/surface separation
+- native third-person camera with on-foot and driving follow modes
+- playable on-foot movement, car entry/exit, traffic, pedestrians, pickups, wanted level, and police spawning
+- upgraded stylized city presentation, lighting, and HUD for the migration track
+
 ### Run in Godot Editor
 
 1. Install Godot `4.x` (recommended: latest stable 4.x).
@@ -40,6 +50,18 @@ Main scene is already configured as:
 
 ### Run from terminal
 
+Fastest option from the repo root:
+
+```bash
+./run-godot.sh
+```
+
+You can also point it at a custom Godot binary:
+
+```bash
+GODOT_BIN="/path/to/Godot" ./run-godot.sh
+```
+
 If you have Godot binary in PATH:
 
 ```bash
@@ -51,6 +73,9 @@ or (on systems where binary is named `godot`):
 ```bash
 godot --path godot
 ```
+
+If the CLI is not installed yet, import `godot/project.godot` through the Godot
+Project Manager first. The repository does not bundle the engine binary.
 
 Current Godot controls mirror the web version:
 

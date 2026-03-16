@@ -26,6 +26,35 @@ const VEHICLE_COLORS := [
 	Color.from_string("#8e7dff", Color.WHITE),
 ]
 
+const COLOR_GRASS := Color(0.11, 0.17, 0.09, 1.0)
+const COLOR_GROUND := Color(0.18, 0.24, 0.14, 1.0)
+const COLOR_ROAD := Color(0.19, 0.21, 0.24, 1.0)
+const COLOR_SHOULDER := Color(0.15, 0.17, 0.20, 1.0)
+const COLOR_SIDEWALK := Color(0.61, 0.56, 0.49, 1.0)
+const COLOR_CURB := Color(0.45, 0.41, 0.36, 1.0)
+const COLOR_LANE := Color(0.96, 0.89, 0.73, 1.0)
+const COLOR_CROSSWALK := Color(0.95, 0.91, 0.84, 1.0)
+const COLOR_GLASS := Color(0.77, 0.84, 0.90, 0.9)
+const COLOR_GLOW := Color(1.0, 0.82, 0.56, 1.0)
+const COLOR_RING_WALL := Color(0.36, 0.39, 0.39, 1.0)
+const COLOR_LAMP := Color(0.37, 0.41, 0.46, 1.0)
+
+const BUILDING_PALETTE := [
+	Color(0.60, 0.47, 0.39, 1.0),
+	Color(0.74, 0.65, 0.52, 1.0),
+	Color(0.45, 0.52, 0.60, 1.0),
+	Color(0.48, 0.56, 0.46, 1.0),
+	Color(0.53, 0.45, 0.39, 1.0),
+]
+
+const SHIRT_PALETTE := [
+	Color(0.65, 0.33, 0.31, 1.0),
+	Color(0.18, 0.37, 0.56, 1.0),
+	Color(0.33, 0.42, 0.23, 1.0),
+	Color(0.63, 0.49, 0.24, 1.0),
+	Color(0.38, 0.30, 0.55, 1.0),
+]
+
 const OBJECTIVE_TEXT := {
 	"intro": "Ukradnij auto i utrzymaj przewage, zanim dopadna cie radiowozy.",
 	"on_foot_hint": "Na piechote jestes zwrotniejszy, ale trudniej zgubisz poscig.",
@@ -55,9 +84,9 @@ var game_over := false
 var objective := OBJECTIVE_TEXT["intro"]
 var game_time := 0.0
 
-var camera_yaw := -0.75
-var camera_pitch := 0.56
-var camera_distance := 13.0
+var camera_yaw := -0.28
+var camera_pitch := 0.46
+var camera_distance := 13.5
 var camera_dragging := false
 
 var world_root: Node3D
@@ -153,23 +182,50 @@ func create_world_geometry() -> void:
 	dynamic_root.name = "DynamicRoot"
 	add_child(dynamic_root)
 
-	add_box(world_root, Vector3(WORLD_SIZE * 1.12, 0.25, WORLD_SIZE * 1.12), Vector3(0, -0.125, 0), Color.from_string("#6fa46f", Color.WHITE))
+	add_box(world_root, Vector3(WORLD_SIZE * 1.12, 1.2, WORLD_SIZE * 1.12), Vector3(0, -0.6, 0), COLOR_GROUND, 1.0, 0.0)
+	add_box(world_root, Vector3(WORLD_SIZE, 0.2, WORLD_SIZE), Vector3(0, 0.02, 0), COLOR_GRASS, 1.0, 0.0)
 
 	road_centers = create_road_centers()
 	sidewalk_guides = create_sidewalk_guides(road_centers)
 
+	var wall_half := WORLD_SIZE * 0.5
+	var wall_height := 14.0
+	add_box(world_root, Vector3(WORLD_SIZE, wall_height, 12.0), Vector3(0, wall_height * 0.5 - 0.5, -wall_half), COLOR_RING_WALL, 0.96, 0.06)
+	add_box(world_root, Vector3(WORLD_SIZE, wall_height, 12.0), Vector3(0, wall_height * 0.5 - 0.5, wall_half), COLOR_RING_WALL, 0.96, 0.06)
+	add_box(world_root, Vector3(12.0, wall_height, WORLD_SIZE), Vector3(-wall_half, wall_height * 0.5 - 0.5, 0), COLOR_RING_WALL, 0.96, 0.06)
+	add_box(world_root, Vector3(12.0, wall_height, WORLD_SIZE), Vector3(wall_half, wall_height * 0.5 - 0.5, 0), COLOR_RING_WALL, 0.96, 0.06)
+
 	for center in road_centers:
-		add_box(world_root, Vector3(WORLD_SIZE * 1.05, 0.02, ROAD_WIDTH), Vector3(0, 0.01, center), Color.from_string("#323538", Color.WHITE))
-		add_box(world_root, Vector3(ROAD_WIDTH, 0.02, WORLD_SIZE * 1.05), Vector3(center, 0.01, 0), Color.from_string("#323538", Color.WHITE))
+		add_box(world_root, Vector3(WORLD_SIZE * 1.05, 0.03, ROAD_WIDTH + 14.0), Vector3(0, 0.015, center), COLOR_SHOULDER, 0.98, 0.0)
+		add_box(world_root, Vector3(ROAD_WIDTH + 14.0, 0.03, WORLD_SIZE * 1.05), Vector3(center, 0.015, 0), COLOR_SHOULDER, 0.98, 0.0)
+		add_box(world_root, Vector3(WORLD_SIZE * 1.05, 0.04, ROAD_WIDTH), Vector3(0, 0.03, center), COLOR_ROAD, 0.9, 0.04)
+		add_box(world_root, Vector3(ROAD_WIDTH, 0.04, WORLD_SIZE * 1.05), Vector3(center, 0.03, 0), COLOR_ROAD, 0.9, 0.04)
+		add_lane_markings(world_root, center, true)
+		add_lane_markings(world_root, center, false)
 
 		var sidewalk_offset := ROAD_WIDTH * 0.5 + SIDEWALK_WIDTH * 0.5
-		add_box(world_root, Vector3(WORLD_SIZE, 0.05, SIDEWALK_WIDTH), Vector3(0, 0.03, center + sidewalk_offset), Color.from_string("#8b8f94", Color.GRAY))
-		add_box(world_root, Vector3(WORLD_SIZE, 0.05, SIDEWALK_WIDTH), Vector3(0, 0.03, center - sidewalk_offset), Color.from_string("#8b8f94", Color.GRAY))
-		add_box(world_root, Vector3(SIDEWALK_WIDTH, 0.05, WORLD_SIZE), Vector3(center + sidewalk_offset, 0.03, 0), Color.from_string("#8b8f94", Color.GRAY))
-		add_box(world_root, Vector3(SIDEWALK_WIDTH, 0.05, WORLD_SIZE), Vector3(center - sidewalk_offset, 0.03, 0), Color.from_string("#8b8f94", Color.GRAY))
+		add_box(world_root, Vector3(WORLD_SIZE, 0.18, SIDEWALK_WIDTH), Vector3(0, 0.085, center + sidewalk_offset), COLOR_SIDEWALK, 0.92, 0.02)
+		add_box(world_root, Vector3(WORLD_SIZE, 0.18, SIDEWALK_WIDTH), Vector3(0, 0.085, center - sidewalk_offset), COLOR_SIDEWALK, 0.92, 0.02)
+		add_box(world_root, Vector3(SIDEWALK_WIDTH, 0.18, WORLD_SIZE), Vector3(center + sidewalk_offset, 0.085, 0), COLOR_SIDEWALK, 0.92, 0.02)
+		add_box(world_root, Vector3(SIDEWALK_WIDTH, 0.18, WORLD_SIZE), Vector3(center - sidewalk_offset, 0.085, 0), COLOR_SIDEWALK, 0.92, 0.02)
 
-	# Niskie bryly budynkow dla orientacji przestrzennej.
-	for index in range(56):
+		add_box(world_root, Vector3(WORLD_SIZE, 0.2, 1.2), Vector3(0, 0.11, center + ROAD_WIDTH * 0.5), COLOR_CURB, 0.86, 0.02)
+		add_box(world_root, Vector3(WORLD_SIZE, 0.2, 1.2), Vector3(0, 0.11, center - ROAD_WIDTH * 0.5), COLOR_CURB, 0.86, 0.02)
+		add_box(world_root, Vector3(1.2, 0.2, WORLD_SIZE), Vector3(center + ROAD_WIDTH * 0.5, 0.11, 0), COLOR_CURB, 0.86, 0.02)
+		add_box(world_root, Vector3(1.2, 0.2, WORLD_SIZE), Vector3(center - ROAD_WIDTH * 0.5, 0.11, 0), COLOR_CURB, 0.86, 0.02)
+
+	for center_x in road_centers:
+		for center_z in road_centers:
+			add_crosswalk(world_root, center_x, center_z - ROAD_WIDTH * 0.5 + 8.0, false)
+			add_crosswalk(world_root, center_x, center_z + ROAD_WIDTH * 0.5 - 8.0, false)
+			add_crosswalk(world_root, center_x - ROAD_WIDTH * 0.5 + 8.0, center_z, true)
+			add_crosswalk(world_root, center_x + ROAD_WIDTH * 0.5 - 8.0, center_z, true)
+			if rng.randf() > 0.42:
+				add_street_lamp(world_root, Vector3(center_x + 58.0, 0.0, center_z + 58.0))
+			if rng.randf() > 0.52:
+				add_street_lamp(world_root, Vector3(center_x - 58.0, 0.0, center_z - 58.0))
+
+	for index in range(64):
 		var x := rng.randf_range(-STREET_EDGE + 40.0, STREET_EDGE - 40.0)
 		var z := rng.randf_range(-STREET_EDGE + 40.0, STREET_EDGE - 40.0)
 		var near_road := absf(x - nearest_value(road_centers, x)) < (ROAD_WIDTH * 0.8) or absf(z - nearest_value(road_centers, z)) < (ROAD_WIDTH * 0.8)
@@ -178,8 +234,16 @@ func create_world_geometry() -> void:
 		var w := rng.randf_range(32.0, 80.0)
 		var h := rng.randf_range(18.0, 78.0)
 		var d := rng.randf_range(32.0, 80.0)
-		var tone := Color.from_hsv(rng.randf_range(0.03, 0.16), 0.2, rng.randf_range(0.52, 0.78))
-		add_box(world_root, Vector3(w, h, d), Vector3(x, h * 0.5, z), tone)
+		var tone := BUILDING_PALETTE[rng.randi_range(0, BUILDING_PALETTE.size() - 1)]
+		add_building(world_root, Vector3(x, 0.0, z), Vector3(w, h, d), tone)
+
+	for _i in range(42):
+		var tree_x := rng.randf_range(-STREET_EDGE + 26.0, STREET_EDGE - 26.0)
+		var tree_z := rng.randf_range(-STREET_EDGE + 26.0, STREET_EDGE - 26.0)
+		var near_street := absf(tree_x - nearest_value(road_centers, tree_x)) < (ROAD_WIDTH * 0.82) or absf(tree_z - nearest_value(road_centers, tree_z)) < (ROAD_WIDTH * 0.82)
+		if near_street:
+			continue
+		add_tree(world_root, Vector3(tree_x, 0.0, tree_z), rng.randf_range(0.9, 1.25))
 
 
 func initialize_state() -> void:
@@ -243,112 +307,76 @@ func create_player_node() -> Node3D:
 	var root := Node3D.new()
 	root.name = "PlayerVisual"
 
-	var body := MeshInstance3D.new()
-	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.55
-	capsule.height = 1.2
-	body.mesh = capsule
-
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color.from_string("#f2c09a", Color.WHITE)
-	mat.roughness = 0.95
-	body.material_override = mat
-	body.position.y = 1.1
-	root.add_child(body)
-
-	var head := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.33
-	head.mesh = sphere
-	var head_mat := StandardMaterial3D.new()
-	head_mat.albedo_color = Color.from_string("#db9f78", Color.WHITE)
-	head.material_override = head_mat
-	head.position.y = 2.2
-	root.add_child(head)
+	add_capsule(root, 0.48, 1.0, Vector3(0, 1.18, 0), Color(0.24, 0.41, 0.58, 1.0), 0.88, 0.0)
+	add_sphere(root, 0.42, Vector3(0, 1.78, 0.02), Color(0.22, 0.18, 0.16, 1.0), 0.98, 0.0)
+	add_sphere(root, 0.34, Vector3(0, 1.98, 0.02), Color(0.86, 0.68, 0.56, 1.0), 0.74, 0.0)
+	add_box(root, Vector3(0.86, 0.18, 0.5), Vector3(0, 1.54, 0.04), Color(0.93, 0.91, 0.84, 1.0), 0.78, 0.0)
+	add_box(root, Vector3(0.68, 0.18, 0.42), Vector3(0, 0.54, 0), Color(0.21, 0.25, 0.31, 1.0), 0.94, 0.0)
+	add_capsule(root, 0.13, 0.66, Vector3(-0.22, 0.36, 0), Color(0.21, 0.25, 0.31, 1.0), 0.94, 0.0)
+	add_capsule(root, 0.13, 0.66, Vector3(0.22, 0.36, 0), Color(0.21, 0.25, 0.31, 1.0), 0.94, 0.0)
+	add_capsule(root, 0.1, 0.56, Vector3(-0.46, 1.16, 0), Color(0.24, 0.41, 0.58, 1.0), 0.88, 0.0)
+	add_capsule(root, 0.1, 0.56, Vector3(0.46, 1.16, 0), Color(0.24, 0.41, 0.58, 1.0), 0.88, 0.0)
+	add_box(root, Vector3(0.26, 0.14, 0.42), Vector3(-0.22, 0.06, 0.08), Color(0.1, 0.12, 0.16, 1.0), 0.98, 0.0)
+	add_box(root, Vector3(0.26, 0.14, 0.42), Vector3(0.22, 0.06, 0.08), Color(0.1, 0.12, 0.16, 1.0), 0.98, 0.0)
+	add_box(root, Vector3(0.14, 0.14, 0.56), Vector3(0.56, 0.96, 0.12), Color(0.12, 0.14, 0.18, 1.0), 0.42, 0.35)
 
 	return root
 
 
 func create_vehicle_node(color: Color, police: bool) -> Node3D:
 	var root := Node3D.new()
+	add_box(root, Vector3(4.3, 0.58, 2.18), Vector3(0.0, 0.76, 0.0), color, 0.42, 0.18)
+	add_box(root, Vector3(2.64, 0.84, 1.9), Vector3(-0.14, 1.34, 0.0), color.darkened(0.06), 0.44, 0.18)
+	add_box(root, Vector3(1.3, 0.18, 2.0), Vector3(1.45, 1.02, 0.0), color.lightened(0.05), 0.4, 0.18)
+	add_box(root, Vector3(1.08, 0.16, 1.94), Vector3(-1.5, 1.0, 0.0), color.darkened(0.08), 0.46, 0.18)
+	add_box(root, Vector3(1.42, 0.14, 1.62), Vector3(-0.24, 1.94, 0.0), color.darkened(0.16), 0.48, 0.18)
+	add_box(root, Vector3(0.72, 0.5, 1.74), Vector3(0.6, 1.58, 0.0), COLOR_GLASS, 0.18, 0.0, Color(0.34, 0.5, 0.64, 1.0), 0.08)
+	add_box(root, Vector3(1.28, 0.42, 1.82), Vector3(-0.28, 1.58, 0.0), COLOR_GLASS, 0.18, 0.0, Color(0.34, 0.5, 0.64, 1.0), 0.08)
+	add_box(root, Vector3(0.64, 0.42, 1.7), Vector3(-1.08, 1.5, 0.0), COLOR_GLASS.darkened(0.1), 0.22, 0.0, Color(0.34, 0.5, 0.64, 1.0), 0.06)
+	add_box(root, Vector3(0.28, 0.24, 2.06), Vector3(2.18, 0.64, 0.0), Color(0.12, 0.14, 0.17, 1.0), 0.56, 0.2)
+	add_box(root, Vector3(0.28, 0.24, 2.02), Vector3(-2.16, 0.62, 0.0), Color(0.12, 0.14, 0.17, 1.0), 0.56, 0.2)
+	add_box(root, Vector3(3.7, 0.12, 0.12), Vector3(-0.05, 0.44, 1.02), Color(0.14, 0.16, 0.18, 1.0), 0.58, 0.28)
+	add_box(root, Vector3(3.7, 0.12, 0.12), Vector3(-0.05, 0.44, -1.02), Color(0.14, 0.16, 0.18, 1.0), 0.58, 0.28)
+	add_sphere(root, 0.16, Vector3(2.08, 0.9, 0.66), Color(1.0, 0.94, 0.82, 1.0), 0.18, 0.0, COLOR_GLOW, 1.0)
+	add_sphere(root, 0.16, Vector3(2.08, 0.9, -0.66), Color(1.0, 0.94, 0.82, 1.0), 0.18, 0.0, COLOR_GLOW, 1.0)
+	add_sphere(root, 0.14, Vector3(-2.08, 0.88, 0.66), Color(0.93, 0.52, 0.50, 1.0), 0.28, 0.0, Color(0.95, 0.24, 0.22, 1.0), 0.48)
+	add_sphere(root, 0.14, Vector3(-2.08, 0.88, -0.66), Color(0.93, 0.52, 0.50, 1.0), 0.28, 0.0, Color(0.95, 0.24, 0.22, 1.0), 0.48)
 
-	var chassis := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(4.2, 1.5, 2.2)
-	chassis.mesh = box
-	chassis.position.y = 0.9
-
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.72
-	chassis.material_override = mat
-	root.add_child(chassis)
-
-	var roof := MeshInstance3D.new()
-	var roof_box := BoxMesh.new()
-	roof_box.size = Vector3(2.2, 0.8, 1.8)
-	roof.mesh = roof_box
-	roof.position = Vector3(-0.3, 1.7, 0.0)
-	var roof_mat := StandardMaterial3D.new()
-	roof_mat.albedo_color = color.darkened(0.2)
-	roof.material_override = roof_mat
-	root.add_child(roof)
+	for wheel_pos in [
+		Vector3(1.36, 0.42, 1.06),
+		Vector3(1.36, 0.42, -1.06),
+		Vector3(-1.32, 0.42, 1.06),
+		Vector3(-1.32, 0.42, -1.06),
+	]:
+		add_cylinder(root, 0.46, 0.46, 0.42, wheel_pos, Color(0.08, 0.1, 0.12, 1.0), 0.96, 0.0, Color.BLACK, 0.0, Vector3(PI * 0.5, 0, 0))
+		add_cylinder(root, 0.22, 0.22, 0.43, wheel_pos, Color(0.72, 0.77, 0.82, 1.0), 0.28, 0.56, Color.BLACK, 0.0, Vector3(PI * 0.5, 0, 0))
 
 	if police:
-		var bar := MeshInstance3D.new()
-		var bar_mesh := BoxMesh.new()
-		bar_mesh.size = Vector3(1.1, 0.26, 0.46)
-		bar.mesh = bar_mesh
-		bar.position = Vector3(-0.2, 2.2, 0)
-		var bar_mat := StandardMaterial3D.new()
-		bar_mat.albedo_color = Color.from_string("#d9ecff", Color.WHITE)
-		bar.material_override = bar_mat
-		root.add_child(bar)
+		add_box(root, Vector3(2.44, 0.24, 0.06), Vector3(-0.08, 1.04, 1.08), Color(0.95, 0.96, 0.98, 1.0), 0.54, 0.04)
+		add_box(root, Vector3(2.44, 0.24, 0.06), Vector3(-0.08, 1.04, -1.08), Color(0.95, 0.96, 0.98, 1.0), 0.54, 0.04)
+		add_box(root, Vector3(1.14, 0.14, 0.44), Vector3(0, 2.24, 0), Color(0.79, 0.84, 0.9, 1.0), 0.24, 0.38)
+		add_box(root, Vector3(0.4, 0.12, 0.32), Vector3(0.22, 2.36, 0), Color(0.62, 0.78, 0.98, 1.0), 0.14, 0.0, Color(0.23, 0.51, 0.96, 1.0), 0.8)
+		add_box(root, Vector3(0.4, 0.12, 0.32), Vector3(-0.22, 2.36, 0), Color(0.97, 0.66, 0.66, 1.0), 0.14, 0.0, Color(0.94, 0.27, 0.27, 1.0), 0.8)
 
 	return root
 
 
 func create_pedestrian_node(shirt: Color, skin: Color) -> Node3D:
 	var root := Node3D.new()
-	var body := MeshInstance3D.new()
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.38
-	cap.height = 1.0
-	body.mesh = cap
-	var shirt_mat := StandardMaterial3D.new()
-	shirt_mat.albedo_color = shirt
-	shirt_mat.roughness = 0.9
-	body.material_override = shirt_mat
-	body.position.y = 0.95
-	root.add_child(body)
-
-	var head := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.24
-	head.mesh = sphere
-	var skin_mat := StandardMaterial3D.new()
-	skin_mat.albedo_color = skin
-	head.material_override = skin_mat
-	head.position.y = 1.86
-	root.add_child(head)
+	add_capsule(root, 0.36, 0.92, Vector3(0, 0.96, 0), shirt, 0.9, 0.0)
+	add_capsule(root, 0.11, 0.62, Vector3(-0.16, 0.36, 0), Color(0.2, 0.23, 0.28, 1.0), 0.96, 0.0)
+	add_capsule(root, 0.11, 0.62, Vector3(0.16, 0.36, 0), Color(0.2, 0.23, 0.28, 1.0), 0.96, 0.0)
+	add_capsule(root, 0.08, 0.5, Vector3(-0.34, 1.02, 0), shirt.darkened(0.06), 0.9, 0.0)
+	add_capsule(root, 0.08, 0.5, Vector3(0.34, 1.02, 0), shirt.darkened(0.06), 0.9, 0.0)
+	add_sphere(root, 0.22, Vector3(0, 1.76, 0.02), skin, 0.72, 0.0)
+	add_sphere(root, 0.24, Vector3(0, 1.94, 0), Color(0.16, 0.14, 0.13, 1.0), 0.96, 0.0)
 	return root
 
 
 func create_pickup_node() -> Node3D:
 	var root := Node3D.new()
-	var mesh := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.45
-	cyl.bottom_radius = 0.45
-	cyl.height = 0.24
-	mesh.mesh = cyl
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color.from_string("#7fffa3", Color.WHITE)
-	mat.emission_enabled = true
-	mat.emission = Color.from_string("#4cff98", Color.WHITE)
-	mat.emission_energy_multiplier = 0.9
-	mesh.material_override = mat
-	root.add_child(mesh)
+	add_cylinder(root, 0.52, 0.52, 0.16, Vector3.ZERO, Color(0.98, 0.84, 0.34, 1.0), 0.28, 0.1, Color(0.95, 0.78, 0.18, 1.0), 0.9, Vector3(PI * 0.5, 0, 0))
+	add_sphere(root, 0.2, Vector3.ZERO, Color(1.0, 0.94, 0.68, 1.0), 0.22, 0.0, Color(0.96, 0.78, 0.22, 1.0), 1.15)
 	return root
 
 
@@ -466,7 +494,7 @@ func create_pedestrian(id: int) -> Dictionary:
 	var spot := random_sidewalk_spot()
 	var route := create_ped_route(spot["x"], spot["z"], spot["axis"])
 	var skin := Color.from_hsv(rng.randf_range(0.07, 0.14), 0.35, rng.randf_range(0.72, 0.84))
-	var shirt := Color.from_hsv(rng.randf(), 0.62, 0.84)
+	var shirt := SHIRT_PALETTE[rng.randi_range(0, SHIRT_PALETTE.size() - 1)]
 	var node := create_pedestrian_node(shirt, skin)
 	dynamic_root.add_child(node)
 	return {
@@ -1343,9 +1371,9 @@ func update_camera(dt: float) -> void:
 	var mode := player["mode"]
 	var target := Vector3(anchor["x"], 2.3 if mode == "vehicle" else 1.45, anchor["z"])
 
-	var desired_pitch := 0.5 if mode == "vehicle" else 0.56
-	var desired_distance := 13.5 if mode == "vehicle" else 10.5
-	var desired_yaw := player["heading"] - (0.18 if mode == "vehicle" else 0.75)
+	var desired_pitch := 0.48 if mode == "vehicle" else 0.46
+	var desired_distance := 13.2 if mode == "vehicle" else 9.8
+	var desired_yaw := player["heading"] - (0.18 if mode == "vehicle" else 0.28)
 
 	if not camera_dragging:
 		camera_yaw = lerp_angle(camera_yaw, desired_yaw, dt * (2.4 if mode == "vehicle" else 4.2))
@@ -1355,7 +1383,9 @@ func update_camera(dt: float) -> void:
 	var horizontal := cos(camera_pitch) * camera_distance
 	var offset := Vector3(cos(camera_yaw) * horizontal, sin(camera_pitch) * camera_distance, sin(camera_yaw) * horizontal)
 	camera.global_position = target - offset
-	camera.look_at(target)
+	var look_ahead := 4.6 if mode == "vehicle" else 3.2
+	var focus := target + Vector3(cos(camera_yaw) * look_ahead, 0.7, sin(camera_yaw) * look_ahead)
+	camera.look_at(focus)
 
 
 func create_hud() -> void:
@@ -1363,15 +1393,32 @@ func create_hud() -> void:
 	layer.name = "HUD"
 	add_child(layer)
 
+	var panel := PanelContainer.new()
+	panel.position = Vector2(18, 18)
+	panel.size = Vector2(430, 252)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.07, 0.1, 0.78)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(1.0, 0.86, 0.66, 0.14)
+	style.corner_radius_top_left = 18
+	style.corner_radius_top_right = 18
+	style.corner_radius_bottom_right = 18
+	style.corner_radius_bottom_left = 18
+	panel.add_theme_stylebox_override("panel", style)
+	layer.add_child(panel)
+
 	hud_label = Label.new()
 	hud_label.name = "HudLabel"
 	hud_label.position = Vector2(18, 14)
-	hud_label.size = Vector2(560, 300)
+	hud_label.size = Vector2(394, 224)
 	hud_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	hud_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	hud_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hud_label.add_theme_font_size_override("font_size", 17)
-	layer.add_child(hud_label)
+	hud_label.add_theme_font_size_override("font_size", 16)
+	panel.add_child(hud_label)
 
 
 func update_hud() -> void:
@@ -1384,17 +1431,17 @@ func update_hud() -> void:
 	var speed := absf(player["speed"])
 	var kmh := int(round(speed * 3.6))
 	var mode_label := "W aucie" if player["mode"] == "vehicle" else "Na piechote"
-	var state_label := "KONIEC GRY" if game_over else "AKTYWNA"
+	var state_label := "RUN ZAMKNIETY" if game_over else "GODOT PROTOTYPE"
 
-	hud_label.text = "MINI GTA / GODOT\n" \
-		+ "Stan: %s\n" % state_label \
+	hud_label.text = "HARBOR HEAT\n" \
+		+ "%s\n\n" % state_label \
 		+ "Cel: %s\n" % objective \
 		+ "Tryb: %s\n" % mode_label \
-		+ "Gotowka: %d\n" % int(player["cash"]) \
+		+ "Gotowka: $%d\n" % int(player["cash"]) \
 		+ "Poscig: %s\n" % stars \
 		+ "Zdrowie: %d\n" % int(round(player["health"])) \
 		+ "Predkosc: %d km/h\n\n" % kmh \
-		+ "Sterowanie: WASD/strzalki, Shift, E, Spacja, R, mysz + kolko"
+		+ "Sterowanie: WASD / Shift / E / Spacja / R / mysz + kolko"
 
 
 func distance_2d(ax: float, az: float, bx: float, bz: float) -> float:
@@ -1482,15 +1529,103 @@ func heading_from_axis(axis: String, dir: int) -> float:
 	return PI * 0.5 if dir > 0 else -PI * 0.5
 
 
-func add_box(parent: Node3D, size: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:
+func create_material(color: Color, roughness: float = 0.9, metallic: float = 0.0, emission: Color = Color.BLACK, emission_energy: float = 0.0) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = roughness
+	material.metallic = metallic
+	if emission_energy > 0.0:
+		material.emission_enabled = true
+		material.emission = emission
+		material.emission_energy_multiplier = emission_energy
+	return material
+
+
+func add_box(parent: Node3D, size: Vector3, pos: Vector3, color: Color, roughness: float = 1.0, metallic: float = 0.0, emission: Color = Color.BLACK, emission_energy: float = 0.0) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = size
 	instance.mesh = box
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 1.0
-	instance.material_override = material
+	instance.material_override = create_material(color, roughness, metallic, emission, emission_energy)
 	instance.position = pos
 	parent.add_child(instance)
 	return instance
+
+
+func add_sphere(parent: Node3D, radius: float, pos: Vector3, color: Color, roughness: float = 0.9, metallic: float = 0.0, emission: Color = Color.BLACK, emission_energy: float = 0.0) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = radius
+	sphere.height = radius * 2.0
+	instance.mesh = sphere
+	instance.material_override = create_material(color, roughness, metallic, emission, emission_energy)
+	instance.position = pos
+	parent.add_child(instance)
+	return instance
+
+
+func add_capsule(parent: Node3D, radius: float, height: float, pos: Vector3, color: Color, roughness: float = 0.9, metallic: float = 0.0) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	var capsule := CapsuleMesh.new()
+	capsule.radius = radius
+	capsule.height = height
+	instance.mesh = capsule
+	instance.material_override = create_material(color, roughness, metallic)
+	instance.position = pos
+	parent.add_child(instance)
+	return instance
+
+
+func add_cylinder(parent: Node3D, top_radius: float, bottom_radius: float, height: float, pos: Vector3, color: Color, roughness: float = 0.9, metallic: float = 0.0, emission: Color = Color.BLACK, emission_energy: float = 0.0, rotation_vec: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	var cylinder := CylinderMesh.new()
+	cylinder.top_radius = top_radius
+	cylinder.bottom_radius = bottom_radius
+	cylinder.height = height
+	instance.mesh = cylinder
+	instance.material_override = create_material(color, roughness, metallic, emission, emission_energy)
+	instance.position = pos
+	instance.rotation = rotation_vec
+	parent.add_child(instance)
+	return instance
+
+
+func add_lane_markings(parent: Node3D, center: float, vertical: bool) -> void:
+	var marker_size := Vector3(18.0, 0.02, 1.1)
+	if vertical:
+		marker_size = Vector3(1.1, 0.02, 18.0)
+	for offset in range(-int(WORLD_SIZE * 0.5) + 28, int(WORLD_SIZE * 0.5) - 28, 52):
+		var position := Vector3(offset, 0.055, center)
+		if vertical:
+			position = Vector3(center, 0.055, offset)
+		add_box(parent, marker_size, position, COLOR_LANE, 0.76, 0.0, COLOR_LANE, 0.04)
+
+
+func add_crosswalk(parent: Node3D, x: float, z: float, horizontal: bool) -> void:
+	for index in range(7):
+		var stripe_offset := (index - 3) * 3.1
+		var size := Vector3(3.8, 0.025, 12.0) if horizontal else Vector3(12.0, 0.025, 3.8)
+		var pos := Vector3(x + stripe_offset, 0.058, z) if horizontal else Vector3(x, 0.058, z + stripe_offset)
+		add_box(parent, size, pos, COLOR_CROSSWALK, 0.8, 0.0, COLOR_CROSSWALK, 0.02)
+
+
+func add_building(parent: Node3D, pos: Vector3, size: Vector3, tone: Color) -> void:
+	add_box(parent, size, Vector3(pos.x, size.y * 0.5, pos.z), tone, 0.86, 0.05)
+	add_box(parent, Vector3(size.x * 1.03, 1.8, size.z * 1.03), Vector3(pos.x, 0.9, pos.z), tone.lightened(0.14), 0.82, 0.04)
+	add_box(parent, Vector3(size.x * 0.94, 1.1, size.z * 0.94), Vector3(pos.x, size.y + 0.55, pos.z), Color(0.36, 0.39, 0.43, 1.0), 0.64, 0.08)
+	if size.y > 34.0 and rng.randf() > 0.46:
+		add_box(parent, Vector3(size.x * 0.22, rng.randf_range(5.0, 13.0), size.z * 0.22), Vector3(pos.x, size.y + 3.6, pos.z), Color(0.43, 0.46, 0.5, 1.0), 0.62, 0.12)
+
+
+func add_tree(parent: Node3D, pos: Vector3, scale_value: float) -> void:
+	add_cylinder(parent, 0.2 * scale_value, 0.3 * scale_value, 3.0 * scale_value, Vector3(pos.x, 1.5 * scale_value, pos.z), Color(0.44, 0.29, 0.18, 1.0), 0.96, 0.02)
+	add_sphere(parent, 1.1 * scale_value, Vector3(pos.x - 0.18, 3.1 * scale_value, pos.z + 0.12), Color(0.29, 0.40, 0.28, 1.0), 0.94, 0.0)
+	add_sphere(parent, 0.9 * scale_value, Vector3(pos.x + 0.22, 3.7 * scale_value, pos.z - 0.16), Color(0.44, 0.58, 0.36, 1.0), 0.92, 0.0)
+	add_sphere(parent, 0.74 * scale_value, Vector3(pos.x, 4.35 * scale_value, pos.z + 0.05), Color(0.34, 0.49, 0.31, 1.0), 0.92, 0.0)
+
+
+func add_street_lamp(parent: Node3D, pos: Vector3) -> void:
+	add_cylinder(parent, 0.08, 0.12, 5.6, Vector3(pos.x, 2.8, pos.z), COLOR_LAMP, 0.58, 0.24)
+	add_box(parent, Vector3(0.14, 0.14, 1.2), Vector3(pos.x, 5.32, pos.z + 0.56), COLOR_LAMP, 0.58, 0.24)
+	add_sphere(parent, 0.14, Vector3(pos.x, 5.14, pos.z + 1.08), Color(1.0, 0.96, 0.86, 1.0), 0.18, 0.0, COLOR_GLOW, 0.82)
+	add_cylinder(parent, 1.26, 1.74, 0.04, Vector3(pos.x, 0.05, pos.z + 1.0), Color(1.0, 0.77, 0.4, 0.2), 0.22, 0.0, Color(1.0, 0.78, 0.42, 1.0), 0.1)
