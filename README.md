@@ -1,10 +1,10 @@
-# Mini GTA 3D
+# Harbor Heat
 
-A browser-based low-poly 3D sandbox built with `Babylon.js` and `Vite`.
+A browser-based arcade-realist 3D chase sandbox built with `Babylon.js` and `Vite`.
 
-The project currently combines on-foot exploration, car stealing, AI traffic,
+The project combines on-foot exploration, car stealing, AI traffic,
 pedestrians, cash pickups, a wanted system, and police pursuit inside a
-procedurally generated city district.
+procedurally generated city district with a golden-hour presentation pass.
 
 UI copy for the HUD and overlay lives in `src/game/config.js`, so in-game text
 can be tuned without touching the render loop or gameplay systems.
@@ -91,7 +91,7 @@ Audio starts after pressing the start button (browser autoplay policy).
 ## Current gameplay
 
 - third-person camera for both on-foot and driving modes
-- procedural low-poly city layout
+- procedural city layout with layered arcade-realist rendering
 - on-foot movement and vehicle hijacking
 - AI traffic moving through intersections
 - pedestrians walking on sidewalks

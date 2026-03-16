@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" fill="#383c42"/>
+  <rect width="128" height="128" fill="url(#grain)" opacity="0.42"/>
+  <g opacity="0.16" fill="#4c535c">
+    <path d="M0 16h128v8H0z"/>
+    <path d="M0 72h128v6H0z"/>
+    <path d="M18 0h5v128h-5z"/>
+    <path d="M92 0h4v128h-4z"/>
+  </g>
+  <g opacity="0.18" fill="#252a31">
+    <circle cx="18" cy="24" r="5"/>
+    <circle cx="54" cy="38" r="6"/>
+    <circle cx="94" cy="20" r="4"/>
+    <circle cx="32" cy="88" r="7"/>
+    <circle cx="78" cy="72" r="5"/>
+    <circle cx="109" cy="104" r="6"/>
+  </g>
+  <defs>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <pattern id="grain" width="128" height="128" patternUnits="userSpaceOnUse">
+      <rect width="128" height="128" filter="url(#noise)" opacity="0.22"/>
+    </pattern>
+  </defs>
+</svg>

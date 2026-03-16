@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mini GTA 3D</title>
+    <title>Harbor Heat</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <div class="shell" id="shell">
       <header class="hud-bar">
         <div>
-          <p class="eyebrow" data-ui="header.eyebrow">LOW POLY STREET SANDBOX</p>
-          <h1>Mini GTA 3D</h1>
+          <p class="eyebrow" data-ui="header.eyebrow">SUNSET CHASE SHOWCASE</p>
+          <h1>Harbor Heat</h1>
         </div>
         <div class="stats">
           <div class="panel">
@@ -26,16 +26,16 @@
       </header>
 
       <main class="game-wrap">
-        <div id="game-root" class="game-root" aria-label="Mini GTA 3D"></div>
+        <div id="game-root" class="game-root" aria-label="Harbor Heat"></div>
         <div class="damage-flash" id="damageFlash" aria-hidden="true"></div>
 
         <section class="start-overlay" id="startOverlay">
           <div class="start-card">
-            <p class="eyebrow" data-ui="overlay.eyebrow">PROTOTYPE DISTRICT</p>
+            <p class="eyebrow" data-ui="overlay.eyebrow">HARBOR HEAT</p>
             <h2 class="start-title" data-district-name>Harbor Heights</h2>
             <p class="start-lede" data-ui="overlay.lead">
-              Przejmij auto, zbieraj paczki i utrzymaj przewagę nad radiowozami
-              w proceduralnym mieście.
+              Wskocz do miasta skapanego w zachodzie slonca i trzymaj przewage
+              nad radiowozami.
             </p>
             <div class="controls-grid">
               <span data-start-control="key">Strzałki / WASD</span><span data-start-control="value">Ruch i jazda</span>
@@ -46,16 +46,16 @@
               <span data-start-control="key">R</span><span data-start-control="value">Reset pozycji</span>
               <span data-start-control="key">Mysz / kółko</span><span data-start-control="value">Obrót i zoom kamery</span>
             </div>
-            <button type="button" id="startButton" data-ui="overlay.startButton">Wjedź do dzielnicy</button>
+            <button type="button" id="startButton" data-ui="overlay.startButton">Odpal przejazd</button>
           </div>
         </section>
 
         <section class="end-overlay is-hidden" id="endOverlay">
           <div class="start-card end-card">
             <p class="eyebrow" data-ui="endOverlay.eyebrow">RUN SUMMARY</p>
-            <h2 class="start-title end-title" id="endTitle">Miasto cie dogonilo</h2>
+            <h2 class="start-title end-title" id="endTitle">Ulica cie domknela</h2>
             <p class="start-lede" id="endLead" data-ui="endOverlay.summaryLead">
-              Jeszcze jeden wjazd i mozna podbic wynik.
+              Jeszcze jeden przejazd i wynik zrobi sie filmowy.
             </p>
             <div class="controls-grid summary-grid">
               <span data-ui="endOverlay.scoreLabel">Wynik</span><span id="endScore">0</span>
@@ -63,7 +63,7 @@
               <span data-ui="endOverlay.heatLabel">Heat bonus</span><span id="endHeat">0</span>
               <span data-ui="endOverlay.eventLabel">Event bonus</span><span id="endEvent">0</span>
             </div>
-            <button type="button" id="restartButton" data-ui="endOverlay.retryButton">Jeszcze jeden run</button>
+            <button type="button" id="restartButton" data-ui="endOverlay.retryButton">Jeszcze jeden przejazd</button>
           </div>
         </section>
 
@@ -71,10 +71,10 @@
           <div class="card">
             <h2 data-ui="hud.objectiveTitle">Cel</h2>
             <p id="objective">
-              Ukradnij auto, zbieraj paczki i utrzymaj się przy życiu podczas
-              pościgu.
+              Przejmij auto, zbieraj paczki i dociagnij target, zanim policyjna
+              obrecz zamknie os ulic.
             </p>
-            <p id="eventLine">Lokalne radio szuka nastepnej okazji</p>
+            <p id="eventLine">Miasto szykuje kolejny impuls</p>
           </div>
           <div class="card">
             <h2 data-ui="hud.controlsTitle">Sterowanie</h2>
@@ -92,16 +92,16 @@
         <aside class="overlay right">
           <div class="card compact">
             <h2 data-ui="hud.statusTitle">Status</h2>
-            <p id="statusLine">Ładowanie miasta</p>
-            <p id="cashLine">Gotówka: $0</p>
-            <p id="wantedLine">Pościg: -----</p>
+            <p id="statusLine">Ladowanie miasta</p>
+            <p id="cashLine">Gotowka: $0</p>
+            <p id="wantedLine">Poscig: -----</p>
             <p id="healthLine">Zdrowie: 100</p>
             <p id="recentLine">Ostatni impuls: ---</p>
           </div>
           <div class="card compact telemetry">
             <h2 data-ui="hud.districtTitle">Dzielnica</h2>
             <p data-district-line>Dzielnica: Harbor Heights</p>
-            <p data-speed-line>Prędkość: 0 km/h</p>
+            <p data-speed-line>Predkosc: 0 km/h</p>
             <p data-traffic-line>Ruch: 0</p>
             <p data-fps-line>FPS: 0</p>
             <p data-timer-line>Czas: 4:00</p>
@@ -114,7 +114,7 @@
             <p id="audioLine">Audio: OFF</p>
             <button type="button" id="muteButton">Wlacz</button>
             <p id="qualityLine">Jakosc: MEDIUM</p>
-            <button type="button" id="qualityButton">Zmien jakosc</button>
+            <button type="button" id="qualityButton">Przelacz preset</button>
             <p id="pauseHint">P pauzuje i wznawia run</p>
             <p id="restartHint">R restartuje run po porazce</p>
           </div>
