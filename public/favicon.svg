@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Harbor Heat">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f3a04b" />
+      <stop offset="55%" stop-color="#d97443" />
+      <stop offset="100%" stop-color="#263241" />
+    </linearGradient>
+    <linearGradient id="shine" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fff2d5" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#ffd59a" stop-opacity="0.72" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)" />
+  <path d="M10 45h44" stroke="#10161d" stroke-opacity="0.55" stroke-width="4" stroke-linecap="round" />
+  <path d="M15 42c7-8 13-12 17-12 4 0 10 4 17 12" fill="none" stroke="#10161d" stroke-opacity="0.45" stroke-width="5" stroke-linecap="round" />
+  <path d="M16 16h9v13h14V16h9v32h-9V36H25v12h-9z" fill="url(#shine)" />
+</svg>
