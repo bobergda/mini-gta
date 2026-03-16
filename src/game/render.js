@@ -686,6 +686,217 @@ function createRoadMarkings(scene, quality, center, worldSize, vertical, y = 0.1
   }
 }
 
+function createCloud(scene, quality, x, y, z, scale = 1) {
+  const cloudMaterial = createMaterial(scene, WORLD_THEME.cloudColor, quality, {
+    alpha: 0.2,
+    emissiveColor: WORLD_THEME.cloudColor,
+    emissiveIntensity: 0.08,
+    disableLighting: true,
+  });
+
+  const puffs = [
+    [-10, 0, 0, 22],
+    [8, 4, 4, 18],
+    [18, 0, -2, 16],
+  ];
+
+  for (const [dx, dy, dz, diameter] of puffs) {
+    const puff = MeshBuilder.CreateSphere("sky-cloud", { diameter: diameter * scale, segments: 12 }, scene);
+    puff.material = cloudMaterial;
+    puff.position.set(x + dx * scale, y + dy * scale, z + dz * scale);
+    puff.isPickable = false;
+  }
+}
+
+function createBackdrop(scene, world, quality) {
+  const skylineMaterial = createMaterial(scene, WORLD_THEME.skylineColor, quality, {
+    emissiveColor: WORLD_THEME.skylineGlow,
+    emissiveIntensity: 0.04,
+    roughness: 0.94,
+    disableLighting: true,
+  });
+  const sunMaterial = createMaterial(scene, WORLD_THEME.sunCore, quality, {
+    emissiveColor: WORLD_THEME.sunHalo,
+    emissiveIntensity: 0.85,
+    disableLighting: true,
+    alpha: 0.92,
+  });
+  const haloMaterial = createMaterial(scene, WORLD_THEME.sunHalo, quality, {
+    emissiveColor: WORLD_THEME.sunHalo,
+    emissiveIntensity: 0.22,
+    disableLighting: true,
+    alpha: 0.24,
+  });
+  const horizon = world.size * 0.47;
+  const step = 72;
+
+  for (let offset = -world.size / 2; offset <= world.size / 2; offset += step) {
+    const n = hash2(offset, horizon);
+    const width = 44 + n * 42;
+    const depth = 24 + n * 18;
+    const height = 34 + n * 88;
+    const north = MeshBuilder.CreateBox("skyline-n", { width, height, depth }, scene);
+    north.material = skylineMaterial;
+    north.position.set(offset, height / 2, -horizon);
+    north.isPickable = false;
+
+    const south = MeshBuilder.CreateBox("skyline-s", { width, height: height * 0.9, depth }, scene);
+    south.material = skylineMaterial;
+    south.position.set(offset * 0.92, (height * 0.9) / 2, horizon);
+    south.isPickable = false;
+
+    const eastHeight = 28 + hash2(horizon, offset) * 74;
+    const east = MeshBuilder.CreateBox("skyline-e", { width: depth, height: eastHeight, depth: width }, scene);
+    east.material = skylineMaterial;
+    east.position.set(horizon, eastHeight / 2, offset * 0.9);
+    east.isPickable = false;
+
+    const westHeight = 28 + hash2(-horizon, offset) * 74;
+    const west = MeshBuilder.CreateBox("skyline-w", { width: depth, height: westHeight, depth: width }, scene);
+    west.material = skylineMaterial;
+    west.position.set(-horizon, westHeight / 2, offset * 0.9);
+    west.isPickable = false;
+  }
+
+  const sun = MeshBuilder.CreateSphere("sun-disc", { diameter: 70, segments: 18 }, scene);
+  sun.material = sunMaterial;
+  sun.position.set(world.size * 0.18, 140, -world.size * 0.32);
+  sun.isPickable = false;
+
+  const halo = MeshBuilder.CreateCylinder(
+    "sun-halo",
+    { diameterTop: 130, diameterBottom: 130, height: 1.4, tessellation: 32 },
+    scene,
+  );
+  halo.material = haloMaterial;
+  halo.position.set(world.size * 0.18, 140, -world.size * 0.32);
+  halo.rotation.x = Math.PI / 2;
+  halo.isPickable = false;
+
+  createCloud(scene, quality, -world.size * 0.14, 164, -world.size * 0.22, 1);
+  createCloud(scene, quality, world.size * 0.08, 184, -world.size * 0.12, 0.78);
+  createCloud(scene, quality, -world.size * 0.2, 156, world.size * 0.04, 0.66);
+}
+
+function createCrosswalk(scene, quality, x, z, horizontal) {
+  scene.metadata ??= {};
+  scene.metadata.crosswalkMaterial ??= createMaterial(scene, WORLD_THEME.crosswalkColor, quality, {
+    emissiveColor: WORLD_THEME.crosswalkColor,
+    emissiveIntensity: 0.04,
+    roughness: 0.78,
+    specularPower: 8,
+    zOffset: -1.5,
+  });
+  const stripeMaterial = scene.metadata.crosswalkMaterial;
+  const stripeCount = 7;
+  const spacing = 3.1;
+
+  for (let index = 0; index < stripeCount; index += 1) {
+    const offset = (index - (stripeCount - 1) / 2) * spacing;
+    const stripe = MeshBuilder.CreateBox(
+      horizontal ? "crosswalk-h" : "crosswalk-v",
+      horizontal ? { width: 3.8, height: 0.04, depth: 12 } : { width: 12, height: 0.04, depth: 3.8 },
+      scene,
+    );
+    stripe.material = stripeMaterial;
+    stripe.position.set(horizontal ? x + offset : x, 0.18, horizontal ? z : z + offset);
+    stripe.isPickable = false;
+    stripe.receiveShadows = false;
+  }
+}
+
+function createIntersectionDetails(scene, world, quality, shadowGenerator) {
+  const planterMaterial = createMaterial(scene, WORLD_THEME.planterStone, quality, {
+    texture: WORLD_THEME.textures.sidewalk,
+    textureScale: 1.4,
+    roughness: 0.84,
+    specularPower: 10,
+  });
+  const leafMaterial = createMaterial(scene, WORLD_THEME.planterLeaf, quality, {
+    texture: WORLD_THEME.textures.detailMask,
+    textureScale: 2.1,
+    roughness: 0.9,
+    specularPower: 8,
+  });
+
+  for (const centerX of world.roadCenters) {
+    for (const centerZ of world.roadCenters) {
+      const edgeOffset = world.roadWidth / 2 - 10;
+      createCrosswalk(scene, quality, centerX, centerZ - edgeOffset, false);
+      createCrosswalk(scene, quality, centerX, centerZ + edgeOffset, false);
+      createCrosswalk(scene, quality, centerX - edgeOffset, centerZ, true);
+      createCrosswalk(scene, quality, centerX + edgeOffset, centerZ, true);
+
+      if (hash2(centerX, centerZ) < 0.42) continue;
+      const corners = [
+        [centerX - 34, centerZ - 34],
+        [centerX + 34, centerZ + 34],
+      ];
+
+      for (const [x, z] of corners) {
+        const planter = MeshBuilder.CreateBox("intersection-planter", { width: 9, height: 1.1, depth: 5.4 }, scene);
+        planter.material = planterMaterial;
+        planter.position.set(x, 0.62, z);
+        applyShadowSetup(planter, shadowGenerator, true);
+
+        const shrubA = MeshBuilder.CreateSphere("intersection-shrub", { diameter: 2.6, segments: 12 }, scene);
+        shrubA.material = leafMaterial;
+        shrubA.position.set(x - 1.7, 1.9, z + 0.4);
+        applyShadowSetup(shrubA, shadowGenerator, true);
+
+        const shrubB = MeshBuilder.CreateSphere("intersection-shrub", { diameter: 2.2, segments: 12 }, scene);
+        shrubB.material = leafMaterial;
+        shrubB.position.set(x + 1.5, 1.75, z - 0.35);
+        applyShadowSetup(shrubB, shadowGenerator, true);
+      }
+    }
+  }
+}
+
+function addRooftopDetails(scene, quality, shadowGenerator, building) {
+  const baseX = building.x;
+  const baseZ = building.z;
+  const roofY = building.h + 1.4;
+  const trimMaterial = createMaterial(scene, WORLD_THEME.rooftopUnit, quality, {
+    texture: WORLD_THEME.textures.roof,
+    textureScale: 1.3,
+    roughness: 0.6,
+    metallic: 0.16,
+    specularPower: 24,
+  });
+
+  if (hash2(baseX, baseZ) > 0.3) {
+    const hvac = MeshBuilder.CreateBox(
+      "roof-hvac",
+      {
+        width: Math.max(4, Math.min(8, building.w * 0.18)),
+        height: 1.8,
+        depth: Math.max(3.2, Math.min(6, building.d * 0.16)),
+      },
+      scene,
+    );
+    hvac.material = trimMaterial;
+    hvac.position.set(baseX - building.w * 0.12, roofY, baseZ + building.d * 0.1);
+    applyShadowSetup(hvac, shadowGenerator, true);
+  }
+
+  if (building.h > 34 && hash2(baseZ, baseX) > 0.56) {
+    const tank = MeshBuilder.CreateCylinder(
+      "roof-tank",
+      { diameterTop: 3.2, diameterBottom: 3.4, height: 3.8, tessellation: 14 },
+      scene,
+    );
+    tank.material = trimMaterial;
+    tank.position.set(baseX + building.w * 0.16, roofY + 1.4, baseZ - building.d * 0.14);
+    applyShadowSetup(tank, shadowGenerator, true);
+
+    const cap = MeshBuilder.CreateSphere("roof-tank-cap", { diameterX: 3.4, diameterY: 1.1, diameterZ: 3.4, segments: 12 }, scene);
+    cap.material = trimMaterial;
+    cap.position.set(baseX + building.w * 0.16, roofY + 3.2, baseZ - building.d * 0.14);
+    applyShadowSetup(cap, shadowGenerator, true);
+  }
+}
+
 function addBuildingWindows(scene, quality, building) {
   const warm = createMaterial(scene, "#fef1cd", quality, {
     texture: WORLD_THEME.textures.glass,
@@ -769,6 +980,7 @@ function addBuildingWindows(scene, quality, building) {
 
 function buildStaticWorld(scene, world, quality, shadowGenerator) {
   setupAtmosphere(scene, world, quality);
+  createBackdrop(scene, world, quality);
 
   const surfaceLevels = {
     shoulderVertical: 0.02,
@@ -1058,6 +1270,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       applyShadowSetup(lobby, shadowGenerator, true);
     }
 
+    addRooftopDetails(scene, quality, shadowGenerator, building);
     addBuildingWindows(scene, quality, building);
   }
 
@@ -1160,6 +1373,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
     pool.isPickable = false;
   }
 
+  createIntersectionDetails(scene, world, quality, shadowGenerator);
   (world.hydrants ?? []).forEach((hydrant) => createHydrant(scene, quality, shadowGenerator, hydrant));
   (world.bollards ?? []).forEach((bollard) => createBollard(scene, quality, shadowGenerator, bollard));
   (world.signs ?? []).forEach((sign) => createSign(scene, quality, shadowGenerator, sign));
