@@ -1720,13 +1720,13 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
 
     const pool = MeshBuilder.CreateCylinder(
       "lamp-pool",
-      { diameterTop: 4.1, diameterBottom: 3.5, height: 0.04, tessellation: 24 },
+      { diameterTop: 2.8, diameterBottom: 2.2, height: 0.04, tessellation: 24 },
       scene,
     );
     pool.material = createMaterial(scene, WORLD_THEME.lampPool, quality, {
       emissiveColor: WORLD_THEME.lampGlow,
-      emissiveIntensity: 0.36,
-      alpha: 0.2,
+      emissiveIntensity: 0.18,
+      alpha: 0.1,
       disableLighting: true,
       specularPower: 1,
     });

@@ -39,6 +39,8 @@ body {
 
 .shell {
   width: 100%;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   padding: 20px 20px 18px;
 }
@@ -115,6 +117,7 @@ h1 {
 
 .game-wrap {
   position: relative;
+  flex: 1;
   border-radius: 30px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -122,6 +125,7 @@ h1 {
     0 42px 96px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 186, 117, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  height: calc(100vh - 150px);
   min-height: calc(100vh - 150px);
   background: linear-gradient(180deg, rgba(12, 15, 18, 0.34), rgba(12, 15, 18, 0.12));
 }
@@ -135,6 +139,7 @@ h1 {
 
 .game-root {
   position: relative;
+  min-height: 100%;
   background:
     radial-gradient(circle at top, rgba(255, 188, 114, 0.22), transparent 30%),
     linear-gradient(180deg, #efb777 0%, #dd8d5f 16%, #70816a 17%, #4f5d49 100%);
@@ -400,6 +405,7 @@ h1 {
 
   .game-wrap {
     display: grid;
+    height: auto;
     min-height: auto;
   }
 
@@ -422,6 +428,7 @@ h1 {
   }
 
   .game-wrap {
+    height: calc(100vh - 182px);
     min-height: calc(100vh - 182px);
   }
 
