@@ -217,13 +217,19 @@ function pickTextureVariant(seedX = 0, seedZ = 0) {
 
   return {
     rotation,
-    offsetU: Math.floor(offsetRollU * 4) * 0.17,
-    offsetV: Math.floor(offsetRollV * 4) * 0.17,
+    offsetU: Math.floor(offsetRollU * 2) * 0.23,
+    offsetV: Math.floor(offsetRollV * 2) * 0.23,
   };
 }
 
 function resolveTexturePath(pathOrKey) {
   return WORLD_THEME.textures[pathOrKey] ?? pathOrKey;
+}
+
+function getSceneCache(scene, key) {
+  scene.metadata ??= {};
+  scene.metadata[key] ??= new Map();
+  return scene.metadata[key];
 }
 
 function createTexture(scene, pathOrKey, options = {}) {
@@ -232,11 +238,10 @@ function createTexture(scene, pathOrKey, options = {}) {
   const rotation = options.rotation ?? 0;
   const offsetU = options.offsetU ?? 0;
   const offsetV = options.offsetV ?? 0;
-  scene.metadata ??= {};
-  scene.metadata.textureCache ??= new Map();
+  const textureCache = getSceneCache(scene, "textureCache");
   const key = `${path}:${scale.toFixed(3)}:${rotation.toFixed(3)}:${offsetU.toFixed(3)}:${offsetV.toFixed(3)}`;
-  if (scene.metadata.textureCache.has(key)) {
-    return scene.metadata.textureCache.get(key);
+  if (textureCache.has(key)) {
+    return textureCache.get(key);
   }
 
   const texture = new Texture(path, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
@@ -247,8 +252,41 @@ function createTexture(scene, pathOrKey, options = {}) {
   texture.uOffset = offsetU;
   texture.vOffset = offsetV;
   texture.wAng = rotation;
-  scene.metadata.textureCache.set(key, texture);
+  textureCache.set(key, texture);
   return texture;
+}
+
+function normalizeCacheValue(value) {
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? `${value}` : value.toFixed(4);
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  return `${value}`;
+}
+
+function buildMaterialCacheKey(mode, color, quality, options = {}) {
+  const qualityKey = [
+    quality.materialMode,
+    quality.textureDetail ?? DEFAULT_QUALITY.textureDetail,
+    quality.textureTileMultiplier ?? DEFAULT_QUALITY.textureTileMultiplier,
+    quality.normalStrength ?? DEFAULT_QUALITY.normalStrength,
+    quality.enableSecondaryDetail ?? DEFAULT_QUALITY.enableSecondaryDetail,
+    quality.enableGrime ?? DEFAULT_QUALITY.enableGrime,
+    quality.enableVehicleLayers ?? DEFAULT_QUALITY.enableVehicleLayers,
+    quality.enableCharacterLayers ?? DEFAULT_QUALITY.enableCharacterLayers,
+  ]
+    .map(normalizeCacheValue)
+    .join("|");
+
+  const optionKey = Object.entries(options)
+    .filter(([, value]) => value !== undefined && value !== null && value !== false && value !== "")
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}:${normalizeCacheValue(value)}`)
+    .join("|");
+
+  return `${mode}|${color}|${qualityKey}|${optionKey}`;
 }
 
 function applySharedMaterialProps(material, options) {
@@ -273,6 +311,19 @@ function createTextureConfig(quality, scale, options = {}) {
 }
 
 function createStandard(scene, color, quality, options = {}) {
+  if (options.cache !== false) {
+    const materialCache = getSceneCache(scene, "materialCache");
+    const cacheKey = buildMaterialCacheKey("standard", color, quality, options);
+    if (materialCache.has(cacheKey)) {
+      return materialCache.get(cacheKey);
+    }
+
+    const material = createStandard(scene, color, quality, { ...options, cache: false });
+    material.metadata = { ...(material.metadata ?? {}), sharedMaterial: true, materialCacheKey: cacheKey };
+    materialCache.set(cacheKey, material);
+    return material;
+  }
+
   const material = new StandardMaterial(`mat-${Math.random().toString(36).slice(2, 9)}`, scene);
   material.diffuseColor = Color3.FromHexString(color);
   material.specularColor = options.specularColor
@@ -331,6 +382,19 @@ function createStandard(scene, color, quality, options = {}) {
 }
 
 function createPbr(scene, color, quality, options = {}) {
+  if (options.cache !== false) {
+    const materialCache = getSceneCache(scene, "materialCache");
+    const cacheKey = buildMaterialCacheKey("pbr", color, quality, options);
+    if (materialCache.has(cacheKey)) {
+      return materialCache.get(cacheKey);
+    }
+
+    const material = createPbr(scene, color, quality, { ...options, cache: false });
+    material.metadata = { ...(material.metadata ?? {}), sharedMaterial: true, materialCacheKey: cacheKey };
+    materialCache.set(cacheKey, material);
+    return material;
+  }
+
   const material = new PBRMaterial(`mat-${Math.random().toString(36).slice(2, 9)}`, scene);
   material.albedoColor = Color3.FromHexString(color);
   material.metallic = options.metallic ?? 0;
@@ -466,6 +530,9 @@ function disposeNode(node) {
   }
   node.dispose(false);
   for (const material of materials) {
+    if (material.metadata?.sharedMaterial) {
+      continue;
+    }
     material.dispose(false, false);
   }
 }
@@ -519,31 +586,38 @@ function createRoundedLimb(scene, root, name, position, dimensions, material) {
 
 function createCharacterMesh(scene, quality, tone, shirt, armed = false, variantSeed = { seedX: 0, seedZ: 0 }) {
   const root = new TransformNode("character", scene);
+  const appearanceSeed =
+    variantSeed.seedId ??
+    `${tone}:${shirt}:${armed ? "armed" : "calm"}:${variantSeed.seedX ?? 0}:${variantSeed.seedZ ?? 0}`;
+  const characterVariant = {
+    seedX: variantSeed.seedX ?? hashString(`${appearanceSeed}:x`) * 100,
+    seedZ: variantSeed.seedZ ?? hashString(`${appearanceSeed}:z`) * 100,
+  };
 
   addBlobShadow(root, scene, quality, 1.15, 0.26);
 
-  const jacketMaterial = createSurfaceMaterial(scene, quality, "cloth", shirt, variantSeed, {
+  const jacketMaterial = createSurfaceMaterial(scene, quality, "cloth", shirt, characterVariant, {
     textureScale: 2.2,
     bumpLevel: 0.12,
     specularPower: 18,
     roughness: 0.86,
   });
   const trouserMaterial = createSurfaceMaterial(scene, quality, "cloth", "#364152", {
-    seedX: (variantSeed.seedX ?? 0) + 1.2,
-    seedZ: (variantSeed.seedZ ?? 0) + 2.3,
+    seedX: characterVariant.seedX + 1.2,
+    seedZ: characterVariant.seedZ + 2.3,
   }, {
     textureScale: 3,
     bumpLevel: 0.08,
     specularPower: 12,
     roughness: 0.92,
   });
-  const shoeMaterial = createSurfaceMaterial(scene, quality, "rubber", "#1a1f27", variantSeed, {
+  const shoeMaterial = createSurfaceMaterial(scene, quality, "rubber", "#1a1f27", characterVariant, {
     textureScale: 2.2,
     bumpLevel: 0.06,
     specularPower: 10,
     roughness: 0.95,
   });
-  const skinMaterial = createSurfaceMaterial(scene, quality, "skin", tone, variantSeed, {
+  const skinMaterial = createSurfaceMaterial(scene, quality, "skin", tone, characterVariant, {
     specularPower: 18,
     roughness: 0.72,
   });
@@ -567,7 +641,7 @@ function createCharacterMesh(scene, quality, tone, shirt, armed = false, variant
     { diameterTop: 0.88, diameterBottom: 0.94, height: 0.14, tessellation: 12 },
     scene,
   );
-  belt.material = createSurfaceMaterial(scene, quality, "rubber", "#252a37", variantSeed, {
+  belt.material = createSurfaceMaterial(scene, quality, "rubber", "#252a37", characterVariant, {
     textureScale: 2,
     bumpLevel: 0.05,
     specularPower: 10,
@@ -598,14 +672,14 @@ function createCharacterMesh(scene, quality, tone, shirt, armed = false, variant
 
   const hair = MeshBuilder.CreateSphere("character-hair", { diameterX: 0.62, diameterY: 0.28, diameterZ: 0.56, segments: 12 }, scene);
   hair.material = createSurfaceMaterial(scene, quality, "cloth", "#2c241e", {
-    seedX: (variantSeed.seedX ?? 0) + 5,
-    seedZ: (variantSeed.seedZ ?? 0) + 5,
+    seedX: characterVariant.seedX + 5,
+    seedZ: characterVariant.seedZ + 5,
   }, { textureScale: 3.4, bumpLevel: 0.04, specularPower: 8, roughness: 0.96 });
   hair.position.set(0, 2.32, 0.01);
   hair.parent = root;
 
   const collar = MeshBuilder.CreateBox("character-collar", { width: 0.22, height: 0.14, depth: 0.12 }, scene);
-  collar.material = createSurfaceMaterial(scene, quality, "cloth", "#f6eddc", variantSeed, {
+  collar.material = createSurfaceMaterial(scene, quality, "cloth", "#f6eddc", characterVariant, {
     textureScale: 4,
     bumpLevel: 0.02,
     specularPower: 12,
@@ -616,7 +690,7 @@ function createCharacterMesh(scene, quality, tone, shirt, armed = false, variant
 
   if (armed) {
     const weapon = MeshBuilder.CreateBox("character-weapon", { width: 0.12, height: 0.14, depth: 0.62 }, scene);
-    weapon.material = createSurfaceMaterial(scene, quality, "bareMetal", "#1c232d", variantSeed, {
+    weapon.material = createSurfaceMaterial(scene, quality, "bareMetal", "#1c232d", characterVariant, {
       textureScale: 4.2,
       bumpLevel: 0.08,
       metallic: 0.18,
@@ -874,6 +948,7 @@ function createVehicleMesh(scene, quality, color, police = false) {
       metallic: 0.1,
       roughness: 0.22,
       specularPower: 120,
+      cache: false,
     });
     const redMat = createMaterial(scene, "#fca5a5", quality, {
       emissiveColor: WORLD_THEME.policeRed,
@@ -881,6 +956,7 @@ function createVehicleMesh(scene, quality, color, police = false) {
       metallic: 0.1,
       roughness: 0.22,
       specularPower: 120,
+      cache: false,
     });
     const leftPod = MeshBuilder.CreateBox("vehicle-siren-blue", { width: 0.42, height: 0.14, depth: 0.34 }, scene);
     leftPod.material = blueMat;
@@ -898,6 +974,7 @@ function createVehicleMesh(scene, quality, color, police = false) {
       alpha: 0.56,
       disableLighting: true,
       specularPower: 2,
+      cache: false,
     });
     const glow = MeshBuilder.CreateCylinder("siren-glow", { diameterTop: 4.2, diameterBottom: 3.4, height: 0.03, tessellation: 28 }, scene);
     glow.material = glowMat;
@@ -927,6 +1004,7 @@ function createPickupMesh(scene, quality) {
     metallic: 0.18,
     roughness: 0.28,
     specularPower: 90,
+    cache: false,
   });
   ring.rotation.z = Math.PI / 2;
   ring.parent = root;
@@ -937,6 +1015,7 @@ function createPickupMesh(scene, quality) {
     metallic: 0.08,
     roughness: 0.34,
     specularPower: 120,
+    cache: false,
   });
   const core = MeshBuilder.CreateSphere("pickup-core", { diameter: 0.42, segments: 14 }, scene);
   core.material = coreMaterial;
@@ -1925,7 +2004,7 @@ export function createSceneView(root, world, state, quality = DEFAULT_QUALITY) {
       ped.tone,
       ped.shirt || WORLD_THEME.shirtPalette[Math.floor(hash2(ped.x, ped.z) * WORLD_THEME.shirtPalette.length)],
       ped.hostile,
-      { seedX: ped.x, seedZ: ped.z },
+      { seedId: `${ped.tone}:${ped.shirt ?? "auto"}:${ped.hostile ? "hostile" : "civilian"}` },
     );
     updateDynamicShadowCasters(mesh, shadowGenerator);
     dynamic.pedestrians.set(ped.id, mesh);
@@ -1980,8 +2059,7 @@ export function renderFrame(view, state, dt) {
   });
   syncEntityMap(state.pedestrians, dynamic.pedestrians, (ped) => {
     const mesh = createCharacterMesh(scene, quality, ped.tone, ped.shirt, ped.hostile, {
-      seedX: ped.x,
-      seedZ: ped.z,
+      seedId: `${ped.tone}:${ped.shirt ?? "auto"}:${ped.hostile ? "hostile" : "civilian"}`,
     });
     updateDynamicShadowCasters(mesh, shadowGenerator);
     return mesh;
