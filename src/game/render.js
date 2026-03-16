@@ -72,6 +72,10 @@ function applySharedMaterialProps(material, options) {
   if (typeof options.alpha === "number") {
     material.alpha = options.alpha;
   }
+
+  if (typeof options.zOffset === "number") {
+    material.zOffset = options.zOffset;
+  }
 }
 
 function createStandard(scene, color, quality, options = {}) {
@@ -656,12 +660,13 @@ function createProjectileMesh(scene, quality, projectile) {
   return root;
 }
 
-function createRoadMarkings(scene, quality, center, worldSize, vertical) {
+function createRoadMarkings(scene, quality, center, worldSize, vertical, y = 0.13) {
   const markMaterial = createMaterial(scene, WORLD_THEME.laneColor, quality, {
     emissiveColor: WORLD_THEME.laneColor,
     emissiveIntensity: 0.08,
     roughness: 0.76,
     specularPower: 10,
+    zOffset: -2,
   });
 
   for (let offset = -worldSize / 2 + 28; offset < worldSize / 2 - 28; offset += 52) {
@@ -672,11 +677,12 @@ function createRoadMarkings(scene, quality, center, worldSize, vertical) {
     );
     mark.material = markMaterial;
     if (vertical) {
-      mark.position.set(center, 0.13, offset);
+      mark.position.set(center, y, offset);
     } else {
-      mark.position.set(offset, 0.13, center);
+      mark.position.set(offset, y, center);
     }
     mark.isPickable = false;
+    mark.receiveShadows = false;
   }
 }
 
@@ -764,6 +770,19 @@ function addBuildingWindows(scene, quality, building) {
 function buildStaticWorld(scene, world, quality, shadowGenerator) {
   setupAtmosphere(scene, world, quality);
 
+  const surfaceLevels = {
+    shoulderVertical: 0.02,
+    shoulderHorizontal: 0.006,
+    roadVertical: 0.086,
+    roadHorizontal: 0.074,
+    laneMarkVertical: 0.158,
+    laneMarkHorizontal: 0.162,
+    sidewalkVertical: 0.146,
+    sidewalkHorizontal: 0.132,
+    curbVertical: 0.21,
+    curbHorizontal: 0.196,
+  };
+
   const groundMaterial = createMaterial(scene, WORLD_THEME.groundTint, quality, {
     texture: WORLD_THEME.textures.detailMask,
     textureScale: 26,
@@ -849,7 +868,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     verticalShoulder.material = shoulderMaterial;
-    verticalShoulder.position.set(center, 0.03, 0);
+    verticalShoulder.position.set(center, surfaceLevels.shoulderVertical, 0);
     applyShadowSetup(verticalShoulder, null, true);
 
     const horizontalShoulder = MeshBuilder.CreateBox(
@@ -858,7 +877,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     horizontalShoulder.material = shoulderMaterial;
-    horizontalShoulder.position.set(0, 0.03, center);
+    horizontalShoulder.position.set(0, surfaceLevels.shoulderHorizontal, center);
     applyShadowSetup(horizontalShoulder, null, true);
 
     const vertical = MeshBuilder.CreateBox(
@@ -867,7 +886,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     vertical.material = roadMaterial;
-    vertical.position.set(center, 0.08, 0);
+    vertical.position.set(center, surfaceLevels.roadVertical, 0);
     applyShadowSetup(vertical, null, true);
 
     const horizontal = MeshBuilder.CreateBox(
@@ -876,11 +895,11 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     horizontal.material = roadMaterial;
-    horizontal.position.set(0, 0.08, center);
+    horizontal.position.set(0, surfaceLevels.roadHorizontal, center);
     applyShadowSetup(horizontal, null, true);
 
-    createRoadMarkings(scene, quality, center, world.size, true);
-    createRoadMarkings(scene, quality, center, world.size, false);
+    createRoadMarkings(scene, quality, center, world.size, true, surfaceLevels.laneMarkVertical);
+    createRoadMarkings(scene, quality, center, world.size, false, surfaceLevels.laneMarkHorizontal);
 
     const leftWalk = MeshBuilder.CreateBox(
       "sidewalk-left",
@@ -888,7 +907,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     leftWalk.material = sidewalkMaterial;
-    leftWalk.position.set(center - world.roadWidth / 2 - world.sidewalkWidth / 2, 0.14, 0);
+    leftWalk.position.set(center - world.roadWidth / 2 - world.sidewalkWidth / 2, surfaceLevels.sidewalkVertical, 0);
     applyShadowSetup(leftWalk, null, true);
 
     const rightWalk = MeshBuilder.CreateBox(
@@ -897,7 +916,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     rightWalk.material = sidewalkMaterial;
-    rightWalk.position.set(center + world.roadWidth / 2 + world.sidewalkWidth / 2, 0.14, 0);
+    rightWalk.position.set(center + world.roadWidth / 2 + world.sidewalkWidth / 2, surfaceLevels.sidewalkVertical, 0);
     applyShadowSetup(rightWalk, null, true);
 
     const topWalk = MeshBuilder.CreateBox(
@@ -906,7 +925,7 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     topWalk.material = sidewalkMaterial;
-    topWalk.position.set(0, 0.14, center - world.roadWidth / 2 - world.sidewalkWidth / 2);
+    topWalk.position.set(0, surfaceLevels.sidewalkHorizontal, center - world.roadWidth / 2 - world.sidewalkWidth / 2);
     applyShadowSetup(topWalk, null, true);
 
     const bottomWalk = MeshBuilder.CreateBox(
@@ -915,27 +934,27 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       scene,
     );
     bottomWalk.material = sidewalkMaterial;
-    bottomWalk.position.set(0, 0.14, center + world.roadWidth / 2 + world.sidewalkWidth / 2);
+    bottomWalk.position.set(0, surfaceLevels.sidewalkHorizontal, center + world.roadWidth / 2 + world.sidewalkWidth / 2);
     applyShadowSetup(bottomWalk, null, true);
 
     const leftCurb = MeshBuilder.CreateBox("curb-left", { width: 0.5, height: 0.24, depth: world.size }, scene);
     leftCurb.material = curbMaterial;
-    leftCurb.position.set(center - world.roadWidth / 2, 0.2, 0);
+    leftCurb.position.set(center - world.roadWidth / 2, surfaceLevels.curbVertical, 0);
     applyShadowSetup(leftCurb, null, true);
 
     const rightCurb = MeshBuilder.CreateBox("curb-right", { width: 0.5, height: 0.24, depth: world.size }, scene);
     rightCurb.material = curbMaterial;
-    rightCurb.position.set(center + world.roadWidth / 2, 0.2, 0);
+    rightCurb.position.set(center + world.roadWidth / 2, surfaceLevels.curbVertical, 0);
     applyShadowSetup(rightCurb, null, true);
 
     const topCurb = MeshBuilder.CreateBox("curb-top", { width: world.size, height: 0.24, depth: 0.5 }, scene);
     topCurb.material = curbMaterial;
-    topCurb.position.set(0, 0.2, center - world.roadWidth / 2);
+    topCurb.position.set(0, surfaceLevels.curbHorizontal, center - world.roadWidth / 2);
     applyShadowSetup(topCurb, null, true);
 
     const bottomCurb = MeshBuilder.CreateBox("curb-bottom", { width: world.size, height: 0.24, depth: 0.5 }, scene);
     bottomCurb.material = curbMaterial;
-    bottomCurb.position.set(0, 0.2, center + world.roadWidth / 2);
+    bottomCurb.position.set(0, surfaceLevels.curbHorizontal, center + world.roadWidth / 2);
     applyShadowSetup(bottomCurb, null, true);
   }
 
@@ -1354,6 +1373,8 @@ export function createSceneView(root, world, state, quality = DEFAULT_QUALITY) {
     shadowGenerator.useBlurExponentialShadowMap = true;
     shadowGenerator.blurKernel = 24;
     shadowGenerator.depthScale = 120;
+    shadowGenerator.bias = 0.0006;
+    shadowGenerator.normalBias = 0.02;
     shadowGenerator.setDarkness(resolvedQuality.shadowDarkness ?? 0.22);
   }
 
