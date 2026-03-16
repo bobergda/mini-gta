@@ -38,10 +38,155 @@ const DEFAULT_QUALITY = {
   shadowDarkness: 0.22,
   materialMode: "standard",
   textureDetail: 1,
+  textureTileMultiplier: 1,
+  normalStrength: 0.28,
+  enableSecondaryDetail: true,
+  enableGrime: false,
+  enableVehicleLayers: true,
+  enableCharacterLayers: true,
   buildingDetail: 1,
   vehicleDetail: 1,
   postExposure: 1.05,
   postContrast: 1.08,
+};
+
+const SURFACE_PRESETS = {
+  road: {
+    layerGroup: "world",
+    textureKey: "asphaltBase",
+    bumpKey: "asphaltNormal",
+    detailKey: "grimeMask",
+    textureScale: 16,
+    bumpScale: 16,
+    detailScale: 10,
+    roughness: 0.9,
+    metallic: 0.02,
+    specularPower: 18,
+  },
+  sidewalk: {
+    layerGroup: "world",
+    textureKey: "concreteBase",
+    bumpKey: "concreteNormal",
+    detailKey: "grimeMask",
+    textureScale: 7,
+    bumpScale: 7,
+    detailScale: 6,
+    roughness: 0.86,
+    metallic: 0.02,
+    specularPower: 18,
+  },
+  concrete: {
+    layerGroup: "world",
+    textureKey: "concreteBase",
+    bumpKey: "concreteNormal",
+    detailKey: "grimeMask",
+    textureScale: 3.2,
+    bumpScale: 3.2,
+    detailScale: 4,
+    roughness: 0.82,
+    metallic: 0.04,
+    specularPower: 14,
+  },
+  facade: {
+    layerGroup: "world",
+    textureKey: "facadeA",
+    altTextureKey: "facadeB",
+    bumpKey: "concreteNormal",
+    detailKey: "grimeMask",
+    textureScale: 3.4,
+    bumpScale: 3.4,
+    detailScale: 3.2,
+    roughness: 0.82,
+    metallic: 0.04,
+    specularPower: 16,
+  },
+  roof: {
+    layerGroup: "world",
+    textureKey: "roofBase",
+    bumpKey: "roofNormal",
+    detailKey: "grimeMask",
+    textureScale: 2.2,
+    bumpScale: 2.2,
+    detailScale: 2.4,
+    roughness: 0.68,
+    metallic: 0.08,
+    specularPower: 18,
+  },
+  glass: {
+    layerGroup: "world",
+    textureKey: "glassBase",
+    detailKey: "grimeMask",
+    textureScale: 1.2,
+    detailScale: 1.6,
+    roughness: 0.18,
+    metallic: 0,
+    alpha: 0.88,
+    specularPower: 100,
+  },
+  paintedMetal: {
+    layerGroup: "vehicle",
+    textureKey: "paintDetail",
+    bumpKey: "metalDetail",
+    detailKey: "grimeMask",
+    textureScale: 3.6,
+    bumpScale: 3.6,
+    detailScale: 3,
+    roughness: 0.42,
+    metallic: 0.18,
+    specularPower: 46,
+  },
+  bareMetal: {
+    layerGroup: "vehicle",
+    textureKey: "metalDetail",
+    bumpKey: "metalDetail",
+    detailKey: "grimeMask",
+    textureScale: 2.8,
+    bumpScale: 2.8,
+    detailScale: 2.6,
+    roughness: 0.38,
+    metallic: 0.52,
+    specularPower: 62,
+  },
+  rubber: {
+    layerGroup: "vehicle",
+    textureKey: "metalDetail",
+    bumpKey: "grimeMask",
+    textureScale: 2.6,
+    bumpScale: 2.4,
+    roughness: 0.94,
+    metallic: 0,
+    specularPower: 8,
+  },
+  foliage: {
+    layerGroup: "world",
+    textureKey: "foliageDetail",
+    bumpKey: "foliageDetail",
+    detailKey: "grimeMask",
+    textureScale: 3,
+    bumpScale: 3,
+    detailScale: 2.5,
+    roughness: 0.9,
+    metallic: 0,
+    specularPower: 8,
+  },
+  cloth: {
+    layerGroup: "character",
+    textureKey: "paintDetail",
+    bumpKey: "paintDetail",
+    detailKey: "grimeMask",
+    textureScale: 2.8,
+    bumpScale: 2.8,
+    detailScale: 2,
+    roughness: 0.88,
+    metallic: 0,
+    specularPower: 16,
+  },
+  skin: {
+    layerGroup: "character",
+    roughness: 0.72,
+    metallic: 0,
+    specularPower: 18,
+  },
 };
 
 function hash2(x, z) {
@@ -49,10 +194,47 @@ function hash2(x, z) {
   return seed - Math.floor(seed);
 }
 
-function createTexture(scene, path, scale = 1) {
+function hashString(str = "") {
+  let value = 0;
+  for (let index = 0; index < str.length; index += 1) {
+    value = (value * 31 + str.charCodeAt(index)) % 100000;
+  }
+  return value / 100000;
+}
+
+function pickTextureVariant(seedX = 0, seedZ = 0) {
+  const rotationRoll = hash2(seedX + 19.1, seedZ + 2.7);
+  const offsetRollU = hash2(seedX + 5.2, seedZ + 7.4);
+  const offsetRollV = hash2(seedX + 11.8, seedZ + 13.6);
+  const rotation =
+    rotationRoll > 0.75
+      ? 0
+      : rotationRoll > 0.5
+        ? Math.PI / 2
+        : rotationRoll > 0.25
+          ? Math.PI
+          : (Math.PI * 3) / 2;
+
+  return {
+    rotation,
+    offsetU: Math.floor(offsetRollU * 4) * 0.17,
+    offsetV: Math.floor(offsetRollV * 4) * 0.17,
+  };
+}
+
+function resolveTexturePath(pathOrKey) {
+  return WORLD_THEME.textures[pathOrKey] ?? pathOrKey;
+}
+
+function createTexture(scene, pathOrKey, options = {}) {
+  const path = resolveTexturePath(pathOrKey);
+  const scale = options.scale ?? 1;
+  const rotation = options.rotation ?? 0;
+  const offsetU = options.offsetU ?? 0;
+  const offsetV = options.offsetV ?? 0;
   scene.metadata ??= {};
   scene.metadata.textureCache ??= new Map();
-  const key = `${path}:${scale.toFixed(3)}`;
+  const key = `${path}:${scale.toFixed(3)}:${rotation.toFixed(3)}:${offsetU.toFixed(3)}:${offsetV.toFixed(3)}`;
   if (scene.metadata.textureCache.has(key)) {
     return scene.metadata.textureCache.get(key);
   }
@@ -62,6 +244,9 @@ function createTexture(scene, path, scale = 1) {
   texture.wrapV = Texture.WRAP_ADDRESSMODE;
   texture.uScale = scale;
   texture.vScale = scale;
+  texture.uOffset = offsetU;
+  texture.vOffset = offsetV;
+  texture.wAng = rotation;
   scene.metadata.textureCache.set(key, texture);
   return texture;
 }
@@ -78,6 +263,15 @@ function applySharedMaterialProps(material, options) {
   }
 }
 
+function createTextureConfig(quality, scale, options = {}) {
+  return {
+    scale: scale * (options.ignoreQualityScale ? 1 : quality.textureTileMultiplier ?? 1),
+    rotation: options.textureRotation ?? options.rotation ?? 0,
+    offsetU: options.textureOffsetU ?? options.offsetU ?? 0,
+    offsetV: options.textureOffsetV ?? options.offsetV ?? 0,
+  };
+}
+
 function createStandard(scene, color, quality, options = {}) {
   const material = new StandardMaterial(`mat-${Math.random().toString(36).slice(2, 9)}`, scene);
   material.diffuseColor = Color3.FromHexString(color);
@@ -87,20 +281,37 @@ function createStandard(scene, color, quality, options = {}) {
   material.specularPower = options.specularPower ?? 32;
 
   if (options.texture) {
-    material.diffuseTexture = createTexture(
-      scene,
-      options.texture,
-      (options.textureScale ?? 1) * (quality.textureDetail ?? 1),
-    );
+    material.diffuseTexture = createTexture(scene, options.texture, createTextureConfig(quality, (options.textureScale ?? 1) * (quality.textureDetail ?? 1), options));
   }
 
   if (options.bumpTexture) {
     material.bumpTexture = createTexture(
       scene,
       options.bumpTexture,
-      (options.textureScale ?? 1) * (quality.textureDetail ?? 1),
+      createTextureConfig(
+        quality,
+        (options.bumpTextureScale ?? options.textureScale ?? 1) * (quality.textureDetail ?? 1),
+        options,
+      ),
     );
     material.bumpTexture.level = options.bumpLevel ?? 0.25;
+  }
+
+  if (options.ambientTexture) {
+    material.ambientTexture = createTexture(
+      scene,
+      options.ambientTexture,
+      createTextureConfig(
+        quality,
+        (options.ambientTextureScale ?? options.textureScale ?? 1) * (quality.textureDetail ?? 1),
+        options,
+      ),
+    );
+    material.ambientColor = new Color3(
+      options.ambientIntensity ?? 0.16,
+      options.ambientIntensity ?? 0.16,
+      options.ambientIntensity ?? 0.16,
+    );
   }
 
   if (options.emissiveColor) {
@@ -127,20 +338,33 @@ function createPbr(scene, color, quality, options = {}) {
   material.environmentIntensity = options.environmentIntensity ?? 0.75;
 
   if (options.texture) {
-    material.albedoTexture = createTexture(
-      scene,
-      options.texture,
-      (options.textureScale ?? 1) * (quality.textureDetail ?? 1),
-    );
+    material.albedoTexture = createTexture(scene, options.texture, createTextureConfig(quality, (options.textureScale ?? 1) * (quality.textureDetail ?? 1), options));
   }
 
   if (options.bumpTexture) {
     material.bumpTexture = createTexture(
       scene,
       options.bumpTexture,
-      (options.textureScale ?? 1) * (quality.textureDetail ?? 1),
+      createTextureConfig(
+        quality,
+        (options.bumpTextureScale ?? options.textureScale ?? 1) * (quality.textureDetail ?? 1),
+        options,
+      ),
     );
     material.bumpTexture.level = options.bumpLevel ?? 0.18;
+  }
+
+  if (options.ambientTexture) {
+    material.ambientTexture = createTexture(
+      scene,
+      options.ambientTexture,
+      createTextureConfig(
+        quality,
+        (options.ambientTextureScale ?? options.textureScale ?? 1) * (quality.textureDetail ?? 1),
+        options,
+      ),
+    );
+    material.ambientTextureStrength = options.ambientIntensity ?? 0.16;
   }
 
   if (options.emissiveColor) {
@@ -160,6 +384,48 @@ function createMaterial(scene, color, quality, options = {}) {
     return createStandard(scene, color, quality, options);
   }
   return createPbr(scene, color, quality, options);
+}
+
+function shouldEnableSurfaceLayers(quality, preset) {
+  if (!quality.enableSecondaryDetail) return false;
+  if (preset.layerGroup === "vehicle") return quality.enableVehicleLayers;
+  if (preset.layerGroup === "character") return quality.enableCharacterLayers;
+  return true;
+}
+
+function createSurfaceMaterial(scene, quality, surface, color, variant = {}, overrides = {}) {
+  const preset = SURFACE_PRESETS[surface];
+  const seedX = variant.seedX ?? 0;
+  const seedZ = variant.seedZ ?? 0;
+  const textureVariant = variant.textureVariant ?? pickTextureVariant(seedX, seedZ);
+  const presetLayers = shouldEnableSurfaceLayers(quality, preset);
+  const useAlt = preset.altTextureKey && hash2(seedX, seedZ) > 0.48;
+  const textureKey = variant.textureKey ?? (useAlt ? preset.altTextureKey : preset.textureKey);
+  const grimeStrength = variant.grimeStrength ?? (0.08 + hash2(seedZ, seedX) * 0.16);
+
+  return createMaterial(scene, color, quality, {
+    texture: textureKey,
+    textureScale: overrides.textureScale ?? preset.textureScale,
+    textureRotation: textureVariant.rotation,
+    textureOffsetU: textureVariant.offsetU,
+    textureOffsetV: textureVariant.offsetV,
+    bumpTexture: presetLayers && quality.normalStrength > 0 ? variant.bumpTexture ?? preset.bumpKey : undefined,
+    bumpTextureScale: overrides.bumpTextureScale ?? preset.bumpScale ?? preset.textureScale,
+    bumpLevel: (overrides.bumpLevel ?? preset.bumpLevel ?? 0.18) * (quality.normalStrength ?? 1),
+    ambientTexture:
+      presetLayers && quality.enableGrime && preset.detailKey ? variant.ambientTexture ?? preset.detailKey : undefined,
+    ambientTextureScale: overrides.ambientTextureScale ?? preset.detailScale ?? preset.textureScale,
+    ambientIntensity: overrides.ambientIntensity ?? grimeStrength,
+    roughness: overrides.roughness ?? preset.roughness,
+    metallic: overrides.metallic ?? preset.metallic,
+    specularColor: overrides.specularColor,
+    specularPower: overrides.specularPower ?? preset.specularPower,
+    alpha: overrides.alpha ?? preset.alpha,
+    emissiveColor: overrides.emissiveColor,
+    emissiveIntensity: overrides.emissiveIntensity,
+    disableLighting: overrides.disableLighting,
+    zOffset: overrides.zOffset,
+  });
 }
 
 function createShadowMaterial(scene, quality, alpha = 0.3) {
@@ -251,32 +517,33 @@ function createRoundedLimb(scene, root, name, position, dimensions, material) {
   jointB.parent = root;
 }
 
-function createCharacterMesh(scene, quality, tone, shirt, armed = false) {
+function createCharacterMesh(scene, quality, tone, shirt, armed = false, variantSeed = { seedX: 0, seedZ: 0 }) {
   const root = new TransformNode("character", scene);
 
   addBlobShadow(root, scene, quality, 1.15, 0.26);
 
-  const jacketMaterial = createMaterial(scene, shirt, quality, {
-    texture: WORLD_THEME.textures.detailMask,
+  const jacketMaterial = createSurfaceMaterial(scene, quality, "cloth", shirt, variantSeed, {
     textureScale: 2.2,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.08,
+    bumpLevel: 0.12,
     specularPower: 18,
     roughness: 0.86,
   });
-  const trouserMaterial = createMaterial(scene, "#364152", quality, {
-    texture: WORLD_THEME.textures.detailMask,
-    textureScale: 2.8,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.06,
+  const trouserMaterial = createSurfaceMaterial(scene, quality, "cloth", "#364152", {
+    seedX: (variantSeed.seedX ?? 0) + 1.2,
+    seedZ: (variantSeed.seedZ ?? 0) + 2.3,
+  }, {
+    textureScale: 3,
+    bumpLevel: 0.08,
     specularPower: 12,
     roughness: 0.92,
   });
-  const shoeMaterial = createMaterial(scene, "#1a1f27", quality, {
+  const shoeMaterial = createSurfaceMaterial(scene, quality, "rubber", "#1a1f27", variantSeed, {
+    textureScale: 2.2,
+    bumpLevel: 0.06,
     specularPower: 10,
     roughness: 0.95,
   });
-  const skinMaterial = createMaterial(scene, tone, quality, {
+  const skinMaterial = createSurfaceMaterial(scene, quality, "skin", tone, variantSeed, {
     specularPower: 18,
     roughness: 0.72,
   });
@@ -300,7 +567,12 @@ function createCharacterMesh(scene, quality, tone, shirt, armed = false) {
     { diameterTop: 0.88, diameterBottom: 0.94, height: 0.14, tessellation: 12 },
     scene,
   );
-  belt.material = createMaterial(scene, "#252a37", quality, { specularPower: 10, roughness: 0.9 });
+  belt.material = createSurfaceMaterial(scene, quality, "rubber", "#252a37", variantSeed, {
+    textureScale: 2,
+    bumpLevel: 0.05,
+    specularPower: 10,
+    roughness: 0.9,
+  });
   belt.position.y = 0.77;
   belt.parent = root;
 
@@ -325,18 +597,32 @@ function createCharacterMesh(scene, quality, tone, shirt, armed = false) {
   head.parent = root;
 
   const hair = MeshBuilder.CreateSphere("character-hair", { diameterX: 0.62, diameterY: 0.28, diameterZ: 0.56, segments: 12 }, scene);
-  hair.material = createMaterial(scene, "#2c241e", quality, { specularPower: 8, roughness: 0.96 });
+  hair.material = createSurfaceMaterial(scene, quality, "cloth", "#2c241e", {
+    seedX: (variantSeed.seedX ?? 0) + 5,
+    seedZ: (variantSeed.seedZ ?? 0) + 5,
+  }, { textureScale: 3.4, bumpLevel: 0.04, specularPower: 8, roughness: 0.96 });
   hair.position.set(0, 2.32, 0.01);
   hair.parent = root;
 
   const collar = MeshBuilder.CreateBox("character-collar", { width: 0.22, height: 0.14, depth: 0.12 }, scene);
-  collar.material = createMaterial(scene, "#f6eddc", quality, { specularPower: 12, roughness: 0.84 });
+  collar.material = createSurfaceMaterial(scene, quality, "cloth", "#f6eddc", variantSeed, {
+    textureScale: 4,
+    bumpLevel: 0.02,
+    specularPower: 12,
+    roughness: 0.84,
+  });
   collar.position.set(0, 1.72, 0.22);
   collar.parent = root;
 
   if (armed) {
     const weapon = MeshBuilder.CreateBox("character-weapon", { width: 0.12, height: 0.14, depth: 0.62 }, scene);
-    weapon.material = createMaterial(scene, "#1c232d", quality, { metallic: 0.15, roughness: 0.45, specularPower: 42 });
+    weapon.material = createSurfaceMaterial(scene, quality, "bareMetal", "#1c232d", variantSeed, {
+      textureScale: 4.2,
+      bumpLevel: 0.08,
+      metallic: 0.18,
+      roughness: 0.45,
+      specularPower: 42,
+    });
     weapon.position.set(0.72, 1.1, 0.16);
     weapon.rotation.x = Math.PI * 0.48;
     weapon.parent = root;
@@ -350,30 +636,34 @@ function createVehicleMesh(scene, quality, color, police = false) {
   addBlobShadow(root, scene, quality, 4.3, 0.3);
 
   const paint = police ? "#131924" : color;
-  const bodyMaterial = createMaterial(scene, paint, quality, {
-    texture: WORLD_THEME.textures.detailMask,
+  const seed = hashString(`${paint}:${police ? "police" : "civil"}`);
+  const vehicleVariant = { seedX: seed * 100 + 1, seedZ: seed * 100 + 7 };
+  const bodyMaterial = createSurfaceMaterial(scene, quality, "paintedMetal", paint, vehicleVariant, {
     textureScale: 3.4,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.06,
+    bumpLevel: 0.12,
     specularColor: "#2b313c",
     specularPower: 46,
     metallic: police ? 0.24 : 0.16,
     roughness: police ? 0.44 : 0.38,
   });
-  const trimMaterial = createMaterial(scene, "#20242b", quality, {
+  const trimMaterial = createSurfaceMaterial(scene, quality, "bareMetal", "#20242b", vehicleVariant, {
+    textureScale: 2.8,
+    bumpLevel: 0.1,
     metallic: 0.2,
     roughness: 0.54,
     specularPower: 32,
   });
-  const chromeMaterial = createMaterial(scene, "#a7b3c2", quality, {
+  const chromeMaterial = createSurfaceMaterial(scene, quality, "bareMetal", "#a7b3c2", vehicleVariant, {
+    textureScale: 3.2,
+    bumpLevel: 0.08,
     metallic: 0.65,
     roughness: 0.24,
     specularPower: 70,
   });
-  const glassMaterial = createMaterial(scene, WORLD_THEME.glassColor, quality, {
-    texture: WORLD_THEME.textures.glass,
+  const glassMaterial = createSurfaceMaterial(scene, quality, "glass", WORLD_THEME.glassColor, vehicleVariant, {
     textureScale: 1.2,
     alpha: 0.88,
+    ambientIntensity: 0.06,
     emissiveColor: WORLD_THEME.glassEdge,
     emissiveIntensity: 0.06,
     metallic: 0,
@@ -501,8 +791,19 @@ function createVehicleMesh(scene, quality, color, police = false) {
   rightTail.position.set(-2.08, 0.9, -0.66);
   rightTail.parent = root;
 
-  const wheelMaterial = createMaterial(scene, "#11151b", quality, { roughness: 0.96, specularPower: 8 });
-  const rimMaterial = createMaterial(scene, "#b5c0cb", quality, { metallic: 0.55, roughness: 0.26, specularPower: 84 });
+  const wheelMaterial = createSurfaceMaterial(scene, quality, "rubber", "#11151b", vehicleVariant, {
+    textureScale: 3,
+    bumpLevel: 0.08,
+    roughness: 0.96,
+    specularPower: 8,
+  });
+  const rimMaterial = createSurfaceMaterial(scene, quality, "bareMetal", "#b5c0cb", vehicleVariant, {
+    textureScale: 3,
+    bumpLevel: 0.08,
+    metallic: 0.55,
+    roughness: 0.26,
+    specularPower: 84,
+  });
   const wheelPositions = [
     [1.38, 0.42, 1.08],
     [1.38, 0.42, -1.08],
@@ -546,9 +847,9 @@ function createVehicleMesh(scene, quality, color, police = false) {
   }
 
   if (police) {
-    const doorStripe = createMaterial(scene, "#f3f4f6", quality, {
-      texture: WORLD_THEME.textures.detailMask,
+    const doorStripe = createSurfaceMaterial(scene, quality, "paintedMetal", "#f3f4f6", vehicleVariant, {
       textureScale: 4.2,
+      bumpLevel: 0.07,
       metallic: 0.04,
       roughness: 0.56,
     });
@@ -806,18 +1107,14 @@ function createCrosswalk(scene, quality, x, z, horizontal) {
 }
 
 function createIntersectionDetails(scene, world, quality, shadowGenerator) {
-  const planterMaterial = createMaterial(scene, WORLD_THEME.planterStone, quality, {
-    texture: WORLD_THEME.textures.sidewalk,
-    textureScale: 1.4,
-    roughness: 0.84,
-    specularPower: 10,
-  });
-  const leafMaterial = createMaterial(scene, WORLD_THEME.planterLeaf, quality, {
-    texture: WORLD_THEME.textures.detailMask,
-    textureScale: 2.1,
-    roughness: 0.9,
-    specularPower: 8,
-  });
+  const planterMaterial = createSurfaceMaterial(scene, quality, "concrete", WORLD_THEME.planterStone, {
+    seedX: 21,
+    seedZ: 13,
+  }, { textureScale: 1.4, bumpLevel: 0.08, roughness: 0.84, specularPower: 10 });
+  const leafMaterial = createSurfaceMaterial(scene, quality, "foliage", WORLD_THEME.planterLeaf, {
+    seedX: 7,
+    seedZ: 31,
+  }, { textureScale: 2.1, bumpLevel: 0.06, roughness: 0.9, specularPower: 8 });
 
   for (const centerX of world.roadCenters) {
     for (const centerZ of world.roadCenters) {
@@ -857,13 +1154,10 @@ function addRooftopDetails(scene, quality, shadowGenerator, building) {
   const baseX = building.x;
   const baseZ = building.z;
   const roofY = building.h + 1.4;
-  const trimMaterial = createMaterial(scene, WORLD_THEME.rooftopUnit, quality, {
-    texture: WORLD_THEME.textures.roof,
-    textureScale: 1.3,
-    roughness: 0.6,
-    metallic: 0.16,
-    specularPower: 24,
-  });
+  const trimMaterial = createSurfaceMaterial(scene, quality, "roof", WORLD_THEME.rooftopUnit, {
+    seedX: baseX,
+    seedZ: baseZ,
+  }, { textureScale: 1.3, bumpLevel: 0.08, roughness: 0.6, metallic: 0.16, specularPower: 24 });
 
   if (hash2(baseX, baseZ) > 0.3) {
     const hvac = MeshBuilder.CreateBox(
@@ -898,9 +1192,12 @@ function addRooftopDetails(scene, quality, shadowGenerator, building) {
 }
 
 function addBuildingWindows(scene, quality, building) {
-  const warm = createMaterial(scene, "#fef1cd", quality, {
-    texture: WORLD_THEME.textures.glass,
+  const warm = createSurfaceMaterial(scene, quality, "glass", "#fef1cd", {
+    seedX: building.x,
+    seedZ: building.z,
+  }, {
     textureScale: 0.8,
+    ambientIntensity: 0.08,
     emissiveColor: "#f3a94d",
     emissiveIntensity: 0.3,
     alpha: 0.88,
@@ -908,9 +1205,12 @@ function addBuildingWindows(scene, quality, building) {
     roughness: 0.24,
     specularPower: 40,
   });
-  const cool = createMaterial(scene, "#d3e6f5", quality, {
-    texture: WORLD_THEME.textures.glass,
+  const cool = createSurfaceMaterial(scene, quality, "glass", "#d3e6f5", {
+    seedX: building.z,
+    seedZ: building.x,
+  }, {
     textureScale: 0.8,
+    ambientIntensity: 0.06,
     emissiveColor: "#80b5df",
     emissiveIntensity: 0.18,
     alpha: 0.88,
@@ -918,19 +1218,21 @@ function addBuildingWindows(scene, quality, building) {
     roughness: 0.18,
     specularPower: 46,
   });
-  const off = createMaterial(scene, "#243142", quality, {
-    texture: WORLD_THEME.textures.glass,
+  const off = createSurfaceMaterial(scene, quality, "glass", "#243142", {
+    seedX: building.x + 3,
+    seedZ: building.z + 7,
+  }, {
     textureScale: 0.8,
+    ambientIntensity: 0.04,
     alpha: 0.92,
     metallic: 0,
     roughness: 0.36,
     specularPower: 28,
   });
-  const frameMaterial = createMaterial(scene, "#61584f", quality, {
-    metallic: 0.1,
-    roughness: 0.72,
-    specularPower: 16,
-  });
+  const frameMaterial = createSurfaceMaterial(scene, quality, "bareMetal", "#61584f", {
+    seedX: building.x,
+    seedZ: building.z,
+  }, { textureScale: 2.2, bumpLevel: 0.06, metallic: 0.1, roughness: 0.72, specularPower: 16 });
 
   const detail = quality.buildingDetail ?? 1;
   const floors = Math.max(3, Math.min(6, Math.floor(((building.h - 16) / 11) * detail)));
@@ -995,11 +1297,12 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
     curbHorizontal: 0.196,
   };
 
-  const groundMaterial = createMaterial(scene, WORLD_THEME.groundTint, quality, {
-    texture: WORLD_THEME.textures.detailMask,
-    textureScale: 26,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.08,
+  const groundMaterial = createSurfaceMaterial(scene, quality, "foliage", WORLD_THEME.groundTint, {
+    seedX: 0,
+    seedZ: 0,
+  }, {
+    textureScale: 18,
+    bumpLevel: 0.04,
     roughness: 0.92,
     specularColor: WORLD_THEME.groundShadowColor,
     specularPower: 10,
@@ -1009,14 +1312,10 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
   ground.position.y = -1;
   applyShadowSetup(ground, null, true);
 
-  const ringMaterial = createMaterial(scene, WORLD_THEME.ringWallColor, quality, {
-    texture: WORLD_THEME.textures.facade,
-    textureScale: 6,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.08,
-    roughness: 0.84,
-    specularPower: 12,
-  });
+  const ringMaterial = createSurfaceMaterial(scene, quality, "facade", WORLD_THEME.ringWallColor, {
+    seedX: 100,
+    seedZ: 100,
+  }, { textureScale: 6, bumpLevel: 0.1, roughness: 0.84, specularPower: 12 });
   const wallThickness = 10;
   const wallHeight = 10;
   const half = world.size / 2;
@@ -1040,38 +1339,34 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
   west.position.set(-half, wallHeight / 2 - 1, 0);
   applyShadowSetup(west, shadowGenerator, true);
 
-  const roadMaterial = createMaterial(scene, WORLD_THEME.roadColor, quality, {
-    texture: WORLD_THEME.textures.asphalt,
+  const roadMaterial = createSurfaceMaterial(scene, quality, "road", WORLD_THEME.roadColor, {
+    seedX: 200,
+    seedZ: 50,
+  }, {
     textureScale: 16,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.06,
+    bumpLevel: 0.16,
     roughness: 0.9,
     specularColor: WORLD_THEME.roadEdgeColor,
     specularPower: 18,
   });
-  const shoulderMaterial = createMaterial(scene, WORLD_THEME.shoulderColor, quality, {
-    texture: WORLD_THEME.textures.asphalt,
-    textureScale: 12,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.04,
-    roughness: 0.94,
-    specularPower: 8,
-  });
-  const sidewalkMaterial = createMaterial(scene, WORLD_THEME.sidewalkColor, quality, {
-    texture: WORLD_THEME.textures.sidewalk,
+  const shoulderMaterial = createSurfaceMaterial(scene, quality, "road", WORLD_THEME.shoulderColor, {
+    seedX: 210,
+    seedZ: 80,
+  }, { textureScale: 12, bumpLevel: 0.1, roughness: 0.94, specularPower: 8 });
+  const sidewalkMaterial = createSurfaceMaterial(scene, quality, "sidewalk", WORLD_THEME.sidewalkColor, {
+    seedX: 14,
+    seedZ: 28,
+  }, {
     textureScale: 7,
-    bumpTexture: WORLD_THEME.textures.detailMask,
-    bumpLevel: 0.04,
+    bumpLevel: 0.12,
     roughness: 0.86,
     specularColor: WORLD_THEME.curbColor,
     specularPower: 18,
   });
-  const curbMaterial = createMaterial(scene, WORLD_THEME.curbColor, quality, {
-    texture: WORLD_THEME.textures.sidewalk,
-    textureScale: 9,
-    roughness: 0.82,
-    specularPower: 10,
-  });
+  const curbMaterial = createSurfaceMaterial(scene, quality, "sidewalk", WORLD_THEME.curbColor, {
+    seedX: 18,
+    seedZ: 32,
+  }, { textureScale: 9, bumpLevel: 0.08, roughness: 0.82, specularPower: 10 });
 
   for (const center of world.roadCenters) {
     const verticalShoulder = MeshBuilder.CreateBox(
@@ -1171,11 +1466,12 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
   }
 
   for (const building of world.buildings) {
-    const shellMaterial = createMaterial(scene, building.color, quality, {
-      texture: WORLD_THEME.textures.facade,
+    const shellMaterial = createSurfaceMaterial(scene, quality, "facade", building.color, {
+      seedX: building.x,
+      seedZ: building.z,
+    }, {
       textureScale: 3.6,
-      bumpTexture: WORLD_THEME.textures.detailMask,
-      bumpLevel: 0.05,
+      bumpLevel: 0.12,
       roughness: 0.82,
       specularColor: WORLD_THEME.buildingShadow,
       specularPower: 16,
@@ -1194,12 +1490,10 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       { width: building.w * 1.02, height: 1.8, depth: building.d * 1.02 },
       scene,
     );
-    podium.material = createMaterial(scene, WORLD_THEME.facadeAccent, quality, {
-      texture: WORLD_THEME.textures.sidewalk,
-      textureScale: 2,
-      roughness: 0.76,
-      specularPower: 12,
-    });
+    podium.material = createSurfaceMaterial(scene, quality, "concrete", WORLD_THEME.facadeAccent, {
+      seedX: building.x + 2,
+      seedZ: building.z + 2,
+    }, { textureScale: 2, bumpLevel: 0.08, roughness: 0.76, specularPower: 12 });
     podium.position.set(building.x, 0.9, building.z);
     applyShadowSetup(podium, shadowGenerator, true);
 
@@ -1208,12 +1502,10 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       { width: building.w * 1.04, height: 1.1, depth: building.d * 1.04 },
       scene,
     );
-    cornice.material = createMaterial(scene, WORLD_THEME.facadeAccent, quality, {
-      texture: WORLD_THEME.textures.sidewalk,
-      textureScale: 2.4,
-      roughness: 0.74,
-      specularPower: 14,
-    });
+    cornice.material = createSurfaceMaterial(scene, quality, "concrete", WORLD_THEME.facadeAccent, {
+      seedX: building.x + 4,
+      seedZ: building.z + 4,
+    }, { textureScale: 2.4, bumpLevel: 0.08, roughness: 0.74, specularPower: 14 });
     cornice.position.set(building.x, building.h - 0.55, building.z);
     applyShadowSetup(cornice, shadowGenerator, true);
 
@@ -1222,15 +1514,10 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       { width: building.w * 0.94, height: 1.2, depth: building.d * 0.94 },
       scene,
     );
-    roof.material = createMaterial(scene, building.roofColor ?? WORLD_THEME.roofPalette[0], quality, {
-      texture: WORLD_THEME.textures.roof,
-      textureScale: 2.2,
-      bumpTexture: WORLD_THEME.textures.detailMask,
-      bumpLevel: 0.04,
-      roughness: 0.68,
-      metallic: 0.08,
-      specularPower: 18,
-    });
+    roof.material = createSurfaceMaterial(scene, quality, "roof", building.roofColor ?? WORLD_THEME.roofPalette[0], {
+      seedX: building.x + 1,
+      seedZ: building.z + 1,
+    }, { textureScale: 2.2, bumpLevel: 0.1, roughness: 0.68, metallic: 0.08, specularPower: 18 });
     roof.position.set(building.x, building.h + 0.62, building.z);
     applyShadowSetup(roof, shadowGenerator, true);
 
@@ -1240,13 +1527,10 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
         { width: building.w * 0.24, height: 5 + hash2(building.z, building.x) * 10, depth: building.d * 0.24 },
         scene,
       );
-      tower.material = createMaterial(scene, WORLD_THEME.roofTrim, quality, {
-        texture: WORLD_THEME.textures.roof,
-        textureScale: 1.8,
-        roughness: 0.62,
-        metallic: 0.18,
-        specularPower: 22,
-      });
+      tower.material = createSurfaceMaterial(scene, quality, "roof", WORLD_THEME.roofTrim, {
+        seedX: building.z,
+        seedZ: building.x,
+      }, { textureScale: 1.8, bumpLevel: 0.08, roughness: 0.62, metallic: 0.18, specularPower: 22 });
       tower.position.set(building.x, building.h + 3.8, building.z);
       applyShadowSetup(tower, shadowGenerator, true);
     }
@@ -1257,10 +1541,13 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
         { width: Math.min(12, building.w * 0.28), height: 4.2, depth: 1.8 },
         scene,
       );
-      lobby.material = createMaterial(scene, WORLD_THEME.glassColor, quality, {
-        texture: WORLD_THEME.textures.glass,
+      lobby.material = createSurfaceMaterial(scene, quality, "glass", WORLD_THEME.glassColor, {
+        seedX: building.x + 7,
+        seedZ: building.z + 9,
+      }, {
         textureScale: 1.1,
         alpha: 0.92,
+        ambientIntensity: 0.06,
         emissiveColor: WORLD_THEME.glassEdge,
         emissiveIntensity: 0.05,
         roughness: 0.2,
@@ -1280,31 +1567,21 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
       { diameterTop: 0.4, diameterBottom: 0.62, height: 3.1, tessellation: 10 },
       scene,
     );
-    trunk.material = createMaterial(scene, WORLD_THEME.treeTrunk, quality, {
-      texture: WORLD_THEME.textures.detailMask,
-      textureScale: 4,
-      roughness: 0.96,
-      specularPower: 8,
-    });
+    trunk.material = createSurfaceMaterial(scene, quality, "bareMetal", WORLD_THEME.treeTrunk, {
+      seedX: tree.x,
+      seedZ: tree.z,
+    }, { textureScale: 4, bumpLevel: 0.05, metallic: 0.04, roughness: 0.96, specularPower: 8 });
     trunk.position.set(tree.x, 1.55, tree.z);
     applyShadowSetup(trunk, shadowGenerator, true);
 
-    const crownMaterialA = createMaterial(scene, WORLD_THEME.treeLeafDark, quality, {
-      texture: WORLD_THEME.textures.detailMask,
-      textureScale: 3,
-      bumpTexture: WORLD_THEME.textures.detailMask,
-      bumpLevel: 0.03,
-      roughness: 0.92,
-      specularPower: 8,
-    });
-    const crownMaterialB = createMaterial(scene, WORLD_THEME.treeLeafLight, quality, {
-      texture: WORLD_THEME.textures.detailMask,
-      textureScale: 3.2,
-      bumpTexture: WORLD_THEME.textures.detailMask,
-      bumpLevel: 0.03,
-      roughness: 0.9,
-      specularPower: 8,
-    });
+    const crownMaterialA = createSurfaceMaterial(scene, quality, "foliage", WORLD_THEME.treeLeafDark, {
+      seedX: tree.x + 1,
+      seedZ: tree.z + 1,
+    }, { textureScale: 3, bumpLevel: 0.08, roughness: 0.92, specularPower: 8 });
+    const crownMaterialB = createSurfaceMaterial(scene, quality, "foliage", WORLD_THEME.treeLeafLight, {
+      seedX: tree.x + 2,
+      seedZ: tree.z + 2,
+    }, { textureScale: 3.2, bumpLevel: 0.08, roughness: 0.9, specularPower: 8 });
 
     const lower = MeshBuilder.CreateSphere("tree-crown-lower", { diameter: 2.9 * tree.scale, segments: 12 }, scene);
     lower.material = crownMaterialA;
@@ -1323,12 +1600,15 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
   }
 
   for (const lamp of world.lamps) {
+    const lampVariant = { seedX: lamp.x, seedZ: lamp.z };
     const pole = MeshBuilder.CreateCylinder(
       "lamp-pole",
       { diameterTop: 0.12, diameterBottom: 0.18, height: 5.8, tessellation: 8 },
       scene,
     );
-    pole.material = createMaterial(scene, WORLD_THEME.lampMetal, quality, {
+    pole.material = createSurfaceMaterial(scene, quality, "bareMetal", WORLD_THEME.lampMetal, lampVariant, {
+      textureScale: 3.2,
+      bumpLevel: 0.08,
       metallic: 0.32,
       roughness: 0.58,
       specularPower: 24,
@@ -1337,7 +1617,9 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
     applyShadowSetup(pole, shadowGenerator, true);
 
     const arm = MeshBuilder.CreateBox("lamp-arm", { width: 0.14, height: 0.14, depth: 1.26 }, scene);
-    arm.material = createMaterial(scene, WORLD_THEME.lampMetal, quality, {
+    arm.material = createSurfaceMaterial(scene, quality, "bareMetal", WORLD_THEME.lampMetal, lampVariant, {
+      textureScale: 3.2,
+      bumpLevel: 0.08,
       metallic: 0.32,
       roughness: 0.58,
       specularPower: 24,
@@ -1381,7 +1663,12 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
 
 function createHydrant(scene, quality, shadowGenerator, position) {
   const root = new TransformNode("hydrant", scene);
-  const material = createMaterial(scene, WORLD_THEME.hydrantColor, quality, {
+  const material = createSurfaceMaterial(scene, quality, "paintedMetal", WORLD_THEME.hydrantColor, {
+    seedX: position.x,
+    seedZ: position.z,
+  }, {
+    textureScale: 3.2,
+    bumpLevel: 0.1,
     metallic: 0.18,
     roughness: 0.54,
     specularPower: 36,
@@ -1413,7 +1700,12 @@ function createHydrant(scene, quality, shadowGenerator, position) {
 
 function createBollard(scene, quality, shadowGenerator, position) {
   const root = new TransformNode("bollard", scene);
-  const material = createMaterial(scene, WORLD_THEME.bollardColor, quality, {
+  const material = createSurfaceMaterial(scene, quality, "bareMetal", WORLD_THEME.bollardColor, {
+    seedX: position.x,
+    seedZ: position.z,
+  }, {
+    textureScale: 3.2,
+    bumpLevel: 0.08,
     metallic: 0.26,
     roughness: 0.52,
     specularPower: 34,
@@ -1424,7 +1716,10 @@ function createBollard(scene, quality, shadowGenerator, position) {
   pole.parent = root;
 
   const cap = MeshBuilder.CreateSphere("bollard-cap", { diameterX: 0.28, diameterY: 0.18, diameterZ: 0.28, segments: 10 }, scene);
-  cap.material = createMaterial(scene, "#c4ccd5", quality, { metallic: 0.4, roughness: 0.38, specularPower: 48 });
+  cap.material = createSurfaceMaterial(scene, quality, "bareMetal", "#c4ccd5", {
+    seedX: position.x + 1,
+    seedZ: position.z + 1,
+  }, { textureScale: 3.4, bumpLevel: 0.08, metallic: 0.4, roughness: 0.38, specularPower: 48 });
   cap.position.set(position.x, 0.94, position.z);
   cap.parent = root;
 
@@ -1434,7 +1729,12 @@ function createBollard(scene, quality, shadowGenerator, position) {
 function createSign(scene, quality, shadowGenerator, position) {
   const root = new TransformNode("sign", scene);
   const board = MeshBuilder.CreateBox("sign-board", { width: 0.42, height: 0.28, depth: 0.04 }, scene);
-  board.material = createMaterial(scene, WORLD_THEME.signAccent, quality, {
+  board.material = createSurfaceMaterial(scene, quality, "paintedMetal", WORLD_THEME.signAccent, {
+    seedX: position.x,
+    seedZ: position.z,
+  }, {
+    textureScale: 4.2,
+    bumpLevel: 0.06,
     emissiveColor: WORLD_THEME.signAccent,
     emissiveIntensity: 0.12,
     roughness: 0.62,
@@ -1447,7 +1747,10 @@ function createSign(scene, quality, shadowGenerator, position) {
   board.parent = root;
 
   const stripe = MeshBuilder.CreateBox("sign-stripe", { width: 0.12, height: 0.22, depth: 0.045 }, scene);
-  stripe.material = createMaterial(scene, "#f8fafc", quality, { roughness: 0.54, metallic: 0.06 });
+  stripe.material = createSurfaceMaterial(scene, quality, "paintedMetal", "#f8fafc", {
+    seedX: position.x + 1,
+    seedZ: position.z + 1,
+  }, { textureScale: 5, bumpLevel: 0.05, roughness: 0.54, metallic: 0.06 });
   stripe.position.copyFrom(board.position);
   stripe.position.y += 0.01;
   stripe.position.x += position.axis === "z" ? 0 : -0.1;
@@ -1456,7 +1759,10 @@ function createSign(scene, quality, shadowGenerator, position) {
   stripe.parent = root;
 
   const pole = MeshBuilder.CreateCylinder("sign-pole", { diameterTop: 0.08, diameterBottom: 0.08, height: 1.6, tessellation: 8 }, scene);
-  pole.material = createMaterial(scene, WORLD_THEME.bollardColor, quality, { metallic: 0.24, roughness: 0.54, specularPower: 28 });
+  pole.material = createSurfaceMaterial(scene, quality, "bareMetal", WORLD_THEME.bollardColor, {
+    seedX: position.x + 2,
+    seedZ: position.z + 2,
+  }, { textureScale: 3.4, bumpLevel: 0.07, metallic: 0.24, roughness: 0.54, specularPower: 28 });
   pole.position.set(position.x, 0.8, position.z);
   pole.parent = root;
 
@@ -1619,6 +1925,7 @@ export function createSceneView(root, world, state, quality = DEFAULT_QUALITY) {
       ped.tone,
       ped.shirt || WORLD_THEME.shirtPalette[Math.floor(hash2(ped.x, ped.z) * WORLD_THEME.shirtPalette.length)],
       ped.hostile,
+      { seedX: ped.x, seedZ: ped.z },
     );
     updateDynamicShadowCasters(mesh, shadowGenerator);
     dynamic.pedestrians.set(ped.id, mesh);
@@ -1672,7 +1979,10 @@ export function renderFrame(view, state, dt) {
     return mesh;
   });
   syncEntityMap(state.pedestrians, dynamic.pedestrians, (ped) => {
-    const mesh = createCharacterMesh(scene, quality, ped.tone, ped.shirt, ped.hostile);
+    const mesh = createCharacterMesh(scene, quality, ped.tone, ped.shirt, ped.hostile, {
+      seedX: ped.x,
+      seedZ: ped.z,
+    });
     updateDynamicShadowCasters(mesh, shadowGenerator);
     return mesh;
   });

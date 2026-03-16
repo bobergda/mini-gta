@@ -13,12 +13,20 @@ describe("presentation helpers", () => {
       bloom: false,
       ssao: false,
       shadows: false,
+      enableSecondaryDetail: false,
+      enableGrime: false,
+      enableVehicleLayers: false,
+      enableCharacterLayers: false,
     });
     expect(getQualityPreset("medium")).toMatchObject({
       materialMode: "standard",
       fxaa: true,
       bloom: true,
       shadows: true,
+      enableSecondaryDetail: true,
+      enableGrime: false,
+      enableVehicleLayers: true,
+      enableCharacterLayers: true,
     });
     expect(getQualityPreset("high")).toMatchObject({
       materialMode: "pbr",
@@ -26,17 +34,28 @@ describe("presentation helpers", () => {
       bloom: true,
       ssao: true,
       shadows: true,
+      enableSecondaryDetail: true,
+      enableGrime: true,
+      enableVehicleLayers: true,
+      enableCharacterLayers: true,
     });
   });
 
   it("keeps texture asset paths inside the visual theme", () => {
     expect(WORLD_THEME.textures).toEqual({
-      asphalt: "/textures/asphalt.svg",
-      sidewalk: "/textures/sidewalk.svg",
-      facade: "/textures/facade.svg",
-      roof: "/textures/roof.svg",
-      glass: "/textures/glass.svg",
-      detailMask: "/textures/detail-mask.svg",
+      asphaltBase: "/textures/asphalt-base.svg",
+      asphaltNormal: "/textures/asphalt-normal.svg",
+      concreteBase: "/textures/concrete-base.svg",
+      concreteNormal: "/textures/concrete-normal.svg",
+      facadeA: "/textures/facade-a.svg",
+      facadeB: "/textures/facade-b.svg",
+      roofBase: "/textures/roof-base.svg",
+      roofNormal: "/textures/roof-normal.svg",
+      glassBase: "/textures/glass-base.svg",
+      metalDetail: "/textures/metal-detail.svg",
+      paintDetail: "/textures/paint-detail.svg",
+      foliageDetail: "/textures/foliage-detail.svg",
+      grimeMask: "/textures/grime-mask.svg",
     });
   });
 
