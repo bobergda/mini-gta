@@ -92,7 +92,9 @@ var camera_dragging: Variant = false
 var world_root: Node3D
 var dynamic_root: Node3D
 var player_node: Node3D
+var hud_title_label: Label
 var hud_label: Label
+var hud_hint_label: Label
 var camera: Camera3D
 
 
@@ -1369,11 +1371,11 @@ func sync_visuals() -> void:
 func update_camera(dt: float) -> void:
 	var anchor: Variant = get_player_anchor()
 	var mode: Variant = player["mode"]
-	var target: Variant = Vector3(anchor["x"], 2.3 if mode == "vehicle" else 1.45, anchor["z"])
+	var target: Variant = Vector3(anchor["x"], 2.4 if mode == "vehicle" else 1.55, anchor["z"])
 
-	var desired_pitch: Variant = 0.5 if mode == "vehicle" else 0.54
-	var desired_distance: Variant = 13.8 if mode == "vehicle" else 11.0
-	var desired_yaw: Variant = player["heading"] - (0.18 if mode == "vehicle" else 0.28)
+	var desired_pitch: Variant = 0.46 if mode == "vehicle" else 0.5
+	var desired_distance: Variant = 14.8 if mode == "vehicle" else 12.2
+	var desired_yaw: Variant = player["heading"] - (0.24 if mode == "vehicle" else 0.34)
 
 	if not camera_dragging:
 		camera_yaw = lerp_angle(camera_yaw, desired_yaw, dt * (2.4 if mode == "vehicle" else 4.2))
@@ -1383,10 +1385,14 @@ func update_camera(dt: float) -> void:
 	var horizontal: Variant = cos(camera_pitch) * camera_distance
 	# Keep the camera above the world plane; the previous sign put the camera
 	# under the street and made the opening view feel broken.
+	var shoulder: Variant = 1.15 if mode == "vehicle" else 0.7
+	var heading_yaw: Variant = float(player["heading"])
+	var right: Variant = Vector3(-sin(heading_yaw), 0.0, cos(heading_yaw))
 	var offset: Variant = Vector3(cos(camera_yaw) * horizontal, -sin(camera_pitch) * camera_distance, sin(camera_yaw) * horizontal)
-	camera.global_position = target - offset
-	var look_ahead: Variant = 4.6 if mode == "vehicle" else 3.2
-	var focus: Variant = target + Vector3(cos(camera_yaw) * look_ahead, 0.7, sin(camera_yaw) * look_ahead)
+	camera.global_position = target - offset + right * shoulder
+	camera.global_position.y = maxf(camera.global_position.y, 4.2 if mode == "vehicle" else 3.4)
+	var look_ahead: Variant = 7.2 if mode == "vehicle" else 4.8
+	var focus: Variant = target + Vector3(cos(heading_yaw) * look_ahead, 1.0 if mode == "vehicle" else 0.85, sin(heading_yaw) * look_ahead)
 	camera.look_at(focus)
 
 
@@ -1397,9 +1403,9 @@ func create_hud() -> void:
 
 	var panel: Variant = PanelContainer.new()
 	panel.position = Vector2(18, 18)
-	panel.size = Vector2(360, 196)
+	panel.size = Vector2(338, 172)
 	var style: Variant = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.07, 0.1, 0.66)
+	style.bg_color = Color(0.04, 0.06, 0.09, 0.6)
 	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
@@ -1412,18 +1418,42 @@ func create_hud() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	layer.add_child(panel)
 
+	hud_title_label = Label.new()
+	hud_title_label.name = "HudTitle"
+	hud_title_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	hud_title_label.offset_left = 16.0
+	hud_title_label.offset_top = 10.0
+	hud_title_label.offset_right = -16.0
+	hud_title_label.offset_bottom = 34.0
+	hud_title_label.add_theme_font_size_override("font_size", 21)
+	hud_title_label.add_theme_color_override("font_color", Color(0.97, 0.90, 0.78, 1.0))
+	panel.add_child(hud_title_label)
+
 	hud_label = Label.new()
 	hud_label.name = "HudLabel"
-	hud_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	hud_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	hud_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hud_label.offset_left = 16.0
-	hud_label.offset_top = 12.0
+	hud_label.offset_top = 42.0
 	hud_label.offset_right = -16.0
-	hud_label.offset_bottom = -12.0
-	hud_label.add_theme_font_size_override("font_size", 14)
+	hud_label.offset_bottom = -30.0
+	hud_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hud_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	hud_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	hud_label.add_theme_font_size_override("font_size", 13)
+	hud_label.add_theme_color_override("font_color", Color(0.86, 0.88, 0.9, 1.0))
 	panel.add_child(hud_label)
+
+	hud_hint_label = Label.new()
+	hud_hint_label.name = "HudHint"
+	hud_hint_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	hud_hint_label.offset_left = 16.0
+	hud_hint_label.offset_top = -24.0
+	hud_hint_label.offset_right = -16.0
+	hud_hint_label.offset_bottom = -8.0
+	hud_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	hud_hint_label.add_theme_font_size_override("font_size", 11)
+	hud_hint_label.add_theme_color_override("font_color", Color(0.95, 0.80, 0.57, 0.92))
+	panel.add_child(hud_hint_label)
 
 
 func update_hud() -> void:
@@ -1436,17 +1466,15 @@ func update_hud() -> void:
 	var speed: Variant = absf(player["speed"])
 	var kmh: Variant = int(round(speed * 3.6))
 	var mode_label: Variant = "W aucie" if player["mode"] == "vehicle" else "Na piechote"
-	var state_label: Variant = "RUN ZAMKNIETY" if game_over else "GODOT PROTOTYPE"
+	var state_label: Variant = "RUN ZAMKNIETY" if game_over else "OTWARTA UCIECZKA"
 
-	hud_label.text = "HARBOR HEAT\n" \
-		+ "%s\n\n" % state_label \
+	hud_title_label.text = "HARBOR HEAT"
+	hud_label.text = "%s\n" % state_label \
 		+ "Cel: %s\n" % objective \
-		+ "Tryb: %s\n" % mode_label \
-		+ "Gotowka: $%d\n" % int(player["cash"]) \
-		+ "Poscig: %s\n" % stars \
-		+ "Zdrowie: %d\n" % int(round(player["health"])) \
-		+ "Predkosc: %d km/h\n\n" % kmh \
-		+ "Sterowanie: WASD / Shift / E / Spacja / R / mysz + kolko"
+		+ "Tryb: %s   Predkosc: %d km/h\n" % [mode_label, kmh] \
+		+ "Gotowka: $%d   Poscig: %s\n" % [int(player["cash"]), stars] \
+		+ "Zdrowie: %d" % int(round(player["health"]))
+	hud_hint_label.text = "WASD / Shift / E / Spacja / R / mysz"
 
 
 func distance_2d(ax: float, az: float, bx: float, bz: float) -> float:

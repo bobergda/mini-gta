@@ -4,35 +4,45 @@
 
 [sub_resource type="Environment" id="Environment_street"]
 background_mode = 2
-background_color = Color(0.964706, 0.760784, 0.478431, 1)
+background_color = Color(0.909804, 0.690196, 0.423529, 1)
 ambient_light_source = 2
-ambient_light_sky_contribution = 0.55
+ambient_light_sky_contribution = 0.62
 tonemap_mode = 2
-tonemap_exposure = 1.05
+tonemap_exposure = 0.92
 glow_enabled = true
-glow_intensity = 0.75
+glow_intensity = 0.52
+glow_bloom = 0.14
 fog_enabled = true
-fog_light_color = Color(0.980392, 0.760784, 0.529412, 1)
-fog_light_energy = 0.45
-fog_density = 0.00055
+fog_light_color = Color(0.972549, 0.713726, 0.486275, 1)
+fog_light_energy = 0.34
+fog_density = 0.00042
 ssao_enabled = true
 ssil_enabled = true
+adjustment_enabled = true
+adjustment_brightness = 0.98
+adjustment_contrast = 1.08
+adjustment_saturation = 0.92
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.86273, -0.409468, 0.297349, 0, 0.587785, 0.809017, -0.505671, -0.697714, 0.506922, 0, 60, 0)
+transform = Transform3D(0.740988, -0.500731, 0.447772, 0, 0.666656, 0.745366, -0.671519, -0.552319, 0.494046, 0, 60, 0)
 light_color = Color(1, 0.847059, 0.666667, 1)
-light_energy = 1.45
+light_energy = 1.28
 shadow_enabled = true
+light_angular_distance = 0.45
+directional_shadow_mode = 2
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 450.0
+shadow_blur = 1.8
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_street")
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.825336, 0.564642, 0, -0.564642, 0.825336, 0, 16, 24)
+transform = Transform3D(0.978031, 0, -0.20846, 0.108659, 0.853715, 0.510699, 0.177833, -0.52074, 0.835002, -10, 15, 22)
 current = true
-fov = 58.0
+fov = 52.0
 near = 0.1
 far = 3000.0
