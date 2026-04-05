@@ -4,7 +4,7 @@ Guidelines for coding agents working in this repository.
 
 ## Project Snapshot
 
-- Stack: `Three.js` + `Vite` + `Vitest` (ES modules).
+- Stack: `Babylon.js` + `Vite` + `Vitest` (ES modules).
 - Entry point: `src/main.js`.
 - Core game logic: `src/game/`.
 - Unit tests: `tests/`.

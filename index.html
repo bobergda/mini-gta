@@ -76,6 +76,15 @@
               obrecz zamknie os ulic.
             </p>
             <p id="eventLine">Miasto szykuje kolejny impuls</p>
+            <div class="progress-unit">
+              <div class="progress-copy">
+                <span data-ui="hud.eventProgressTitle">Momentum eventu</span>
+                <strong id="eventProgressLabel">Czeka</strong>
+              </div>
+              <div class="meter-bar meter-accent">
+                <div class="meter-fill" id="eventProgressFill"></div>
+              </div>
+            </div>
           </div>
           <div class="card">
             <h2 data-ui="hud.controlsTitle">Sterowanie</h2>
@@ -97,6 +106,21 @@
             <p id="cashLine">Gotowka: $0</p>
             <p id="wantedLine">Poscig: -----</p>
             <p id="healthLine">Zdrowie: 100</p>
+            <div class="meter-grid">
+              <div class="meter-card">
+                <span data-ui="hud.healthLabel">Zdrowie</span>
+                <div class="meter-bar">
+                  <div class="meter-fill" id="healthFill"></div>
+                </div>
+              </div>
+              <div class="meter-card">
+                <span data-ui="hud.wantedLabel">Poscig</span>
+                <div class="meter-bar meter-cool">
+                  <div class="meter-fill" id="wantedFill"></div>
+                </div>
+              </div>
+            </div>
+            <p id="pursuitLine">Skan: Czysto</p>
             <p id="recentLine">Ostatni impuls: ---</p>
           </div>
           <div class="card compact telemetry">
@@ -109,6 +133,15 @@
             <p data-score-line>Wynik: 0</p>
             <p data-target-line>Target: 2400</p>
             <p data-bonus-line>Heat bonus: 0</p>
+            <div class="progress-unit telemetry-progress">
+              <div class="progress-copy">
+                <span data-ui="hud.targetProgressTitle">Presja rundy</span>
+                <strong id="scoreProgressLabel">0%</strong>
+              </div>
+              <div class="meter-bar meter-warm">
+                <div class="meter-fill" id="scoreFill"></div>
+              </div>
+            </div>
           </div>
           <div class="card compact controls-card">
             <h2 data-ui="hud.audioTitle">Audio</h2>
@@ -116,8 +149,8 @@
             <button type="button" id="muteButton">Wlacz</button>
             <p id="qualityLine">Jakosc: MEDIUM</p>
             <button type="button" id="qualityButton">Przelacz preset</button>
-            <p id="pauseHint">P pauzuje i wznawia run</p>
-            <p id="restartHint">R restartuje run po porazce</p>
+            <p id="pauseHint">P pauzuje i wznawia przejazd</p>
+            <p id="restartHint">R restartuje przejazd po porazce</p>
           </div>
         </aside>
       </main>

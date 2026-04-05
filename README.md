@@ -7,7 +7,8 @@ An arcade-realist 3D chase sandbox with two parallel tracks:
 
 The project combines on-foot exploration, car stealing, AI traffic,
 pedestrians, cash pickups, a wanted system, and police pursuit inside a
-procedurally generated city district with a golden-hour presentation pass.
+procedurally generated city district with a golden-hour presentation pass,
+new district landmarks, and a more readable pursuit HUD.
 
 UI copy for the HUD and overlay lives in `src/game/config.js`, so in-game text
 can be tuned without touching the render loop or gameplay systems.
@@ -117,13 +118,14 @@ Audio starts after pressing the start button (browser autoplay policy).
 
 - third-person camera for both on-foot and driving modes
 - procedural city layout with layered arcade-realist rendering
+- district landmarks including a plaza, gas station, parking lot, and construction site
 - on-foot movement and vehicle hijacking
-- AI traffic moving through intersections
+- AI traffic with occasional junction hesitation for less deterministic street flow
 - pedestrians walking on sidewalks
 - cash pickups around the district
-- wanted level and police spawning
+- wanted level with contact/search/cooling pursuit phases and more aggressive police spawns
 - weapon combat with projectile fire (player and hostile NPCs)
 - sharper low-speed driving, tighter high-speed steering, and stuck recovery
 - oriented vehicle collisions with short hit reaction feedback
 - basic collisions, damage, and game over state
-- start overlay with in-game HUD telemetry
+- start overlay with in-game HUD telemetry, pursuit scan, and run/event progress meters

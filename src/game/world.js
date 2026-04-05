@@ -60,6 +60,48 @@ export function randomItem(items, rng = Math.random) {
   return items[Math.floor(rng() * items.length)];
 }
 
+function createBlockLandmark(type, left, right, top, bottom, rng = Math.random) {
+  const centerX = (left + right) / 2 + (rng() - 0.5) * 8;
+  const centerZ = (top + bottom) / 2 + (rng() - 0.5) * 8;
+  const width = Math.max(34, (right - left) * (0.22 + rng() * 0.08));
+  const depth = Math.max(34, (bottom - top) * (0.22 + rng() * 0.08));
+
+  return {
+    type,
+    x: centerX,
+    z: centerZ,
+    width,
+    depth,
+    rotation: rng() > 0.5 ? 0 : Math.PI / 2,
+    variant: Math.floor(rng() * 3),
+  };
+}
+
+function chooseLandmarkType(xi, zi, blockCount, rng = Math.random) {
+  const center = Math.floor((blockCount - 1) / 2);
+
+  if (xi === center && zi === center) {
+    return "plaza";
+  }
+
+  if (zi === 0 && xi === center) {
+    return "parking";
+  }
+
+  if (xi === 0 && zi === center) {
+    return "gas";
+  }
+
+  if (xi === blockCount - 1 && zi === center) {
+    return "construction";
+  }
+
+  const roll = rng();
+  if (roll > 0.92) return "miniPlaza";
+  if (roll > 0.82) return "parking";
+  return null;
+}
+
 export function createSidewalkGuides(roadCenters) {
   const offset = ROAD_WIDTH / 2 + SIDEWALK_WIDTH / 2;
   return roadCenters
@@ -210,16 +252,27 @@ export function chooseTrafficTurn(vehicle, world, chaseTarget = null, rng = Math
   return options[2];
 }
 
-export function findPoliceSpawn(world, target, rng = Math.random) {
+export function findPoliceSpawn(world, target, rng = Math.random, options = {}) {
   const edgeOffset = 260 + rng() * 120;
+  const aggressiveBias = options.aggressiveBias ?? 0;
   const edge = Math.floor(rng() * 4);
   let x = target.x;
   let z = target.z;
 
-  if (edge === 0) z -= edgeOffset;
-  if (edge === 1) x += edgeOffset;
-  if (edge === 2) z += edgeOffset;
-  if (edge === 3) x -= edgeOffset;
+  if (typeof target.heading === "number" && rng() < aggressiveBias) {
+    const forwardX = Math.cos(target.heading);
+    const forwardZ = Math.sin(target.heading);
+    const flank = rng() > 0.5 ? 1 : -1;
+    const sideX = -forwardZ * flank;
+    const sideZ = forwardX * flank;
+    x += forwardX * edgeOffset * 0.72 + sideX * (60 + rng() * 48);
+    z += forwardZ * edgeOffset * 0.72 + sideZ * (60 + rng() * 48);
+  } else {
+    if (edge === 0) z -= edgeOffset;
+    if (edge === 1) x += edgeOffset;
+    if (edge === 2) z += edgeOffset;
+    if (edge === 3) x -= edgeOffset;
+  }
 
   x = Math.max(-world.streetEdge, Math.min(world.streetEdge, x));
   z = Math.max(-world.streetEdge, Math.min(world.streetEdge, z));
@@ -289,17 +342,24 @@ export function createWorld(rng = Math.random) {
   const hydrants = [];
   const bollards = [];
   const signs = [];
+  const landmarks = [];
   const colors = WORLD_THEME.buildingPalette;
   const roofs = WORLD_THEME.roofPalette;
+  const blockCount = roadCenters.length - 1;
 
-  for (let xi = 0; xi < roadCenters.length - 1; xi += 1) {
-    for (let zi = 0; zi < roadCenters.length - 1; zi += 1) {
+  for (let xi = 0; xi < blockCount; xi += 1) {
+    for (let zi = 0; zi < blockCount; zi += 1) {
       const left = roadCenters[xi] + ROAD_WIDTH / 2 + SIDEWALK_WIDTH;
       const right = roadCenters[xi + 1] - ROAD_WIDTH / 2 - SIDEWALK_WIDTH;
       const top = roadCenters[zi] + ROAD_WIDTH / 2 + SIDEWALK_WIDTH;
       const bottom = roadCenters[zi + 1] - ROAD_WIDTH / 2 - SIDEWALK_WIDTH;
       const width = right - left;
       const depth = bottom - top;
+      const landmarkType = chooseLandmarkType(xi, zi, blockCount, rng);
+
+      if (landmarkType) {
+        landmarks.push(createBlockLandmark(landmarkType, left, right, top, bottom, rng));
+      }
 
       for (let bx = 0; bx < 2; bx += 1) {
         for (let bz = 0; bz < 2; bz += 1) {
@@ -350,6 +410,7 @@ export function createWorld(rng = Math.random) {
     hydrants,
     bollards,
     signs,
+    landmarks,
     roadWidth: ROAD_WIDTH,
     sidewalkWidth: SIDEWALK_WIDTH,
     laneOffset: LANE_OFFSET,

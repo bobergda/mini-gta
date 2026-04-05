@@ -1359,6 +1359,494 @@ function addBuildingWindows(scene, quality, building) {
   }
 }
 
+function createLandmarkRoot(scene, landmark) {
+  const root = new TransformNode(`landmark-${landmark.type}`, scene);
+  root.position.set(landmark.x, 0, landmark.z);
+  root.rotation.y = landmark.rotation ?? 0;
+  return root;
+}
+
+function createLandmarkPad(root, scene, quality, landmark, surface, color, options = {}) {
+  const pad = MeshBuilder.CreateBox(
+    `${landmark.type}-pad`,
+    {
+      width: options.width ?? landmark.width,
+      height: options.height ?? 0.24,
+      depth: options.depth ?? landmark.depth,
+    },
+    scene,
+  );
+  pad.material = createSurfaceMaterial(
+    scene,
+    quality,
+    surface,
+    color,
+    {
+      seedX: landmark.x + (options.seedOffsetX ?? 0),
+      seedZ: landmark.z + (options.seedOffsetZ ?? 0),
+    },
+    {
+      textureScale: options.textureScale ?? 2.8,
+      bumpLevel: options.bumpLevel ?? 0.08,
+      roughness: options.roughness,
+      metallic: options.metallic,
+      specularPower: options.specularPower,
+      emissiveColor: options.emissiveColor,
+      emissiveIntensity: options.emissiveIntensity,
+      disableLighting: options.disableLighting,
+    },
+  );
+  pad.position.y = options.heightOffset ?? 0.12;
+  pad.parent = root;
+  return pad;
+}
+
+function createMiniPlaza(scene, quality, shadowGenerator, landmark) {
+  const root = createLandmarkRoot(scene, landmark);
+  const pad = createLandmarkPad(
+    root,
+    scene,
+    quality,
+    landmark,
+    "sidewalk",
+    WORLD_THEME.planterStone,
+    { width: landmark.width * 0.9, depth: landmark.depth * 0.9, textureScale: 1.9 },
+  );
+  const treeVariant = { seedX: landmark.x + 2, seedZ: landmark.z + 2 };
+  const planter = MeshBuilder.CreateBox(
+    "mini-plaza-planter",
+    { width: 8.5, height: 1, depth: 8.5 },
+    scene,
+  );
+  planter.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "concrete",
+    WORLD_THEME.planterStone,
+    treeVariant,
+    { textureScale: 1.4, bumpLevel: 0.06, roughness: 0.86, specularPower: 10 },
+  );
+  planter.position.y = 0.64;
+  planter.parent = root;
+
+  const shrub = MeshBuilder.CreateSphere("mini-plaza-shrub", { diameter: 4.6, segments: 14 }, scene);
+  shrub.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "foliage",
+    WORLD_THEME.planterLeaf,
+    treeVariant,
+    { textureScale: 2.4, bumpLevel: 0.06, roughness: 0.92, specularPower: 8 },
+  );
+  shrub.position.y = 2.4;
+  shrub.parent = root;
+
+  applyShadowSetup(root, shadowGenerator, true);
+  applyShadowSetup(pad, null, true);
+}
+
+function createPlaza(scene, quality, shadowGenerator, landmark) {
+  const root = createLandmarkRoot(scene, landmark);
+  const plazaPad = createLandmarkPad(
+    root,
+    scene,
+    quality,
+    landmark,
+    "sidewalk",
+    "#b4a18e",
+    { width: landmark.width, depth: landmark.depth, textureScale: 1.8, bumpLevel: 0.06 },
+  );
+  applyShadowSetup(plazaPad, null, true);
+
+  const fountainBase = MeshBuilder.CreateCylinder(
+    "plaza-fountain-base",
+    { diameterTop: 12, diameterBottom: 12.6, height: 1.1, tessellation: 20 },
+    scene,
+  );
+  fountainBase.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "concrete",
+    WORLD_THEME.facadeAccent,
+    { seedX: landmark.x, seedZ: landmark.z },
+    { textureScale: 1.6, bumpLevel: 0.08, roughness: 0.82, specularPower: 12 },
+  );
+  fountainBase.position.y = 0.68;
+  fountainBase.parent = root;
+
+  const water = MeshBuilder.CreateCylinder(
+    "plaza-fountain-water",
+    { diameterTop: 9.4, diameterBottom: 9.4, height: 0.18, tessellation: 20 },
+    scene,
+  );
+  water.material = createMaterial(scene, "#7fc4f4", quality, {
+    emissiveColor: "#96d8ff",
+    emissiveIntensity: 0.34,
+    alpha: 0.86,
+    roughness: 0.12,
+    metallic: 0,
+  });
+  water.position.y = 1.18;
+  water.parent = root;
+
+  const sculpture = MeshBuilder.CreateBox(
+    "plaza-sculpture",
+    { width: 2.2, height: 6.4, depth: 2.2 },
+    scene,
+  );
+  sculpture.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "bareMetal",
+    "#a9b6c4",
+    { seedX: landmark.x + 5, seedZ: landmark.z + 5 },
+    { textureScale: 3, bumpLevel: 0.08, metallic: 0.38, roughness: 0.32, specularPower: 52 },
+  );
+  sculpture.position.y = 4.2;
+  sculpture.rotation.z = 0.18;
+  sculpture.parent = root;
+
+  const sculptureCross = MeshBuilder.CreateBox(
+    "plaza-sculpture-cross",
+    { width: 5.6, height: 1.1, depth: 1.1 },
+    scene,
+  );
+  sculptureCross.material = sculpture.material;
+  sculptureCross.position.y = 5.2;
+  sculptureCross.rotation.y = 0.64;
+  sculptureCross.parent = root;
+
+  const benchMaterial = createSurfaceMaterial(
+    scene,
+    quality,
+    "roof",
+    "#5d4937",
+    { seedX: landmark.x + 1, seedZ: landmark.z + 2 },
+    { textureScale: 2.4, bumpLevel: 0.06, roughness: 0.76, specularPower: 14 },
+  );
+  const benchLegMaterial = createSurfaceMaterial(
+    scene,
+    quality,
+    "bareMetal",
+    WORLD_THEME.bollardColor,
+    { seedX: landmark.x + 3, seedZ: landmark.z + 4 },
+    { textureScale: 3, bumpLevel: 0.07, metallic: 0.26, roughness: 0.54, specularPower: 28 },
+  );
+
+  for (const [x, z, rotation] of [
+    [-12, -9, 0.3],
+    [12, 9, Math.PI + 0.3],
+    [12, -9, Math.PI - 0.3],
+    [-12, 9, -0.3],
+  ]) {
+    const seat = MeshBuilder.CreateBox("plaza-bench-seat", { width: 4.2, height: 0.26, depth: 1.2 }, scene);
+    seat.material = benchMaterial;
+    seat.position.set(x, 0.74, z);
+    seat.rotation.y = rotation;
+    seat.parent = root;
+
+    const back = MeshBuilder.CreateBox("plaza-bench-back", { width: 4.2, height: 1.1, depth: 0.2 }, scene);
+    back.material = benchMaterial;
+    back.position.set(x, 1.38, z - 0.42);
+    back.rotation.y = rotation;
+    back.parent = root;
+
+    for (const legX of [-1.4, 1.4]) {
+      const leg = MeshBuilder.CreateBox("plaza-bench-leg", { width: 0.18, height: 0.72, depth: 1 }, scene);
+      leg.material = benchLegMaterial;
+      leg.position.set(x + legX, 0.36, z);
+      leg.rotation.y = rotation;
+      leg.parent = root;
+    }
+  }
+
+  applyShadowSetup(root, shadowGenerator, true);
+}
+
+function createGasStation(scene, quality, shadowGenerator, landmark) {
+  const root = createLandmarkRoot(scene, landmark);
+  const pad = createLandmarkPad(
+    root,
+    scene,
+    quality,
+    landmark,
+    "concrete",
+    "#867a6d",
+    { width: landmark.width, depth: landmark.depth, textureScale: 2.2, bumpLevel: 0.06 },
+  );
+  applyShadowSetup(pad, null, true);
+
+  const canopyMaterial = createSurfaceMaterial(
+    scene,
+    quality,
+    "paintedMetal",
+    "#f6efe2",
+    { seedX: landmark.x, seedZ: landmark.z },
+    { textureScale: 2.8, bumpLevel: 0.06, roughness: 0.48, metallic: 0.12, specularPower: 28 },
+  );
+  const accentMaterial = createSurfaceMaterial(
+    scene,
+    quality,
+    "paintedMetal",
+    WORLD_THEME.signAccent,
+    { seedX: landmark.x + 2, seedZ: landmark.z + 2 },
+    {
+      textureScale: 4,
+      bumpLevel: 0.06,
+      emissiveColor: WORLD_THEME.signAccent,
+      emissiveIntensity: 0.14,
+      roughness: 0.56,
+      metallic: 0.08,
+    },
+  );
+
+  const canopy = MeshBuilder.CreateBox("gas-canopy", { width: 18, height: 1.2, depth: 13 }, scene);
+  canopy.material = canopyMaterial;
+  canopy.position.set(0, 5.8, 0);
+  canopy.parent = root;
+
+  const canopyStripe = MeshBuilder.CreateBox("gas-canopy-stripe", { width: 18.2, height: 0.24, depth: 1.1 }, scene);
+  canopyStripe.material = accentMaterial;
+  canopyStripe.position.set(0, 5.34, 5.3);
+  canopyStripe.parent = root;
+
+  for (const [x, z] of [
+    [-6.2, -4.2],
+    [6.2, -4.2],
+    [-6.2, 4.2],
+    [6.2, 4.2],
+  ]) {
+    const post = MeshBuilder.CreateBox("gas-post", { width: 0.62, height: 5, depth: 0.62 }, scene);
+    post.material = canopyMaterial;
+    post.position.set(x, 2.5, z);
+    post.parent = root;
+  }
+
+  const kiosk = MeshBuilder.CreateBox("gas-kiosk", { width: 9.6, height: 5.2, depth: 7.2 }, scene);
+  kiosk.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "facade",
+    "#d9c1a7",
+    { seedX: landmark.x + 4, seedZ: landmark.z + 8 },
+    { textureScale: 2.6, bumpLevel: 0.08, roughness: 0.8, specularPower: 14 },
+  );
+  kiosk.position.set(0, 2.6, -11.5);
+  kiosk.parent = root;
+
+  const storefront = MeshBuilder.CreateBox("gas-storefront", { width: 7.8, height: 2.8, depth: 0.26 }, scene);
+  storefront.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "glass",
+    WORLD_THEME.glassColor,
+    { seedX: landmark.x + 6, seedZ: landmark.z + 9 },
+    { alpha: 0.9, emissiveColor: WORLD_THEME.glassEdge, emissiveIntensity: 0.08, roughness: 0.18 },
+  );
+  storefront.position.set(0, 2.7, -7.98);
+  storefront.parent = root;
+
+  for (const x of [-4, 4]) {
+    const pump = MeshBuilder.CreateBox("gas-pump", { width: 1.6, height: 2.7, depth: 1.6 }, scene);
+    pump.material = accentMaterial;
+    pump.position.set(x, 1.4, 0);
+    pump.parent = root;
+
+    const pumpTop = MeshBuilder.CreateBox("gas-pump-top", { width: 1.7, height: 0.3, depth: 1.7 }, scene);
+    pumpTop.material = canopyMaterial;
+    pumpTop.position.set(x, 2.82, 0);
+    pumpTop.parent = root;
+  }
+
+  const signTower = MeshBuilder.CreateBox("gas-sign", { width: 2.2, height: 9.4, depth: 1.1 }, scene);
+  signTower.material = accentMaterial;
+  signTower.position.set(-landmark.width * 0.35, 4.7, landmark.depth * 0.22);
+  signTower.parent = root;
+
+  applyShadowSetup(root, shadowGenerator, true);
+}
+
+function createConstructionSite(scene, quality, shadowGenerator, landmark) {
+  const root = createLandmarkRoot(scene, landmark);
+  const dirtPad = createLandmarkPad(
+    root,
+    scene,
+    quality,
+    landmark,
+    "concrete",
+    "#7d7367",
+    { width: landmark.width, depth: landmark.depth, textureScale: 2.6, bumpLevel: 0.05, roughness: 0.9 },
+  );
+  applyShadowSetup(dirtPad, null, true);
+
+  const slab = MeshBuilder.CreateBox("site-slab", { width: landmark.width * 0.68, height: 0.32, depth: landmark.depth * 0.58 }, scene);
+  slab.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "concrete",
+    "#a89c8d",
+    { seedX: landmark.x + 3, seedZ: landmark.z + 6 },
+    { textureScale: 1.7, bumpLevel: 0.06, roughness: 0.84, specularPower: 12 },
+  );
+  slab.position.y = 0.28;
+  slab.parent = root;
+
+  const steelMaterial = createSurfaceMaterial(
+    scene,
+    quality,
+    "bareMetal",
+    "#7d8794",
+    { seedX: landmark.x + 2, seedZ: landmark.z + 3 },
+    { textureScale: 3.2, bumpLevel: 0.07, metallic: 0.34, roughness: 0.42, specularPower: 34 },
+  );
+
+  for (const x of [-7, 0, 7]) {
+    for (const z of [-5, 5]) {
+      const column = MeshBuilder.CreateBox("site-column", { width: 0.7, height: 10.4, depth: 0.7 }, scene);
+      column.material = steelMaterial;
+      column.position.set(x, 5.2, z);
+      column.parent = root;
+    }
+  }
+
+  for (const y of [3.2, 6.4, 9.6]) {
+    const beam = MeshBuilder.CreateBox("site-beam", { width: 15.8, height: 0.46, depth: 0.5 }, scene);
+    beam.material = steelMaterial;
+    beam.position.set(0, y, -5.2);
+    beam.parent = root;
+
+    const beamBack = MeshBuilder.CreateBox("site-beam-back", { width: 15.8, height: 0.46, depth: 0.5 }, scene);
+    beamBack.material = steelMaterial;
+    beamBack.position.set(0, y, 5.2);
+    beamBack.parent = root;
+  }
+
+  const container = MeshBuilder.CreateBox("site-container", { width: 7.5, height: 2.8, depth: 3.2 }, scene);
+  container.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "paintedMetal",
+    "#d57a36",
+    { seedX: landmark.x + 7, seedZ: landmark.z + 7 },
+    { textureScale: 4.4, bumpLevel: 0.08, roughness: 0.56, metallic: 0.1, specularPower: 24 },
+  );
+  container.position.set(-8.5, 1.5, 8.2);
+  container.parent = root;
+
+  const craneMast = MeshBuilder.CreateBox("site-crane-mast", { width: 1.1, height: 18, depth: 1.1 }, scene);
+  craneMast.material = steelMaterial;
+  craneMast.position.set(landmark.width * 0.3, 9, -landmark.depth * 0.26);
+  craneMast.parent = root;
+
+  const craneArm = MeshBuilder.CreateBox("site-crane-arm", { width: 18, height: 0.9, depth: 0.9 }, scene);
+  craneArm.material = steelMaterial;
+  craneArm.position.set(landmark.width * 0.3 - 4.5, 17.3, -landmark.depth * 0.26);
+  craneArm.parent = root;
+
+  const counterweight = MeshBuilder.CreateBox("site-counterweight", { width: 2.1, height: 1.2, depth: 1.6 }, scene);
+  counterweight.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "concrete",
+    "#8e8578",
+    { seedX: landmark.x + 11, seedZ: landmark.z + 4 },
+    { textureScale: 1.8, bumpLevel: 0.05, roughness: 0.88, specularPower: 10 },
+  );
+  counterweight.position.set(landmark.width * 0.3 + 6.7, 17.3, -landmark.depth * 0.26);
+  counterweight.parent = root;
+
+  applyShadowSetup(root, shadowGenerator, true);
+}
+
+function createParkingLot(scene, quality, shadowGenerator, landmark) {
+  const root = createLandmarkRoot(scene, landmark);
+  const pad = createLandmarkPad(
+    root,
+    scene,
+    quality,
+    landmark,
+    "road",
+    WORLD_THEME.shoulderColor,
+    { width: landmark.width, depth: landmark.depth, textureScale: 5.4, bumpLevel: 0.09, roughness: 0.92, specularPower: 8 },
+  );
+  applyShadowSetup(pad, null, true);
+
+  const stripeMaterial = createMaterial(scene, WORLD_THEME.crosswalkColor, quality, {
+    emissiveColor: WORLD_THEME.crosswalkColor,
+    emissiveIntensity: 0.03,
+    disableLighting: true,
+    alpha: 0.9,
+  });
+  const rowCount = 5;
+  for (let row = 0; row < rowCount; row += 1) {
+    const z = -landmark.depth * 0.26 + row * 6.1;
+    const divider = MeshBuilder.CreateBox("parking-divider", { width: landmark.width * 0.72, height: 0.02, depth: 0.24 }, scene);
+    divider.material = stripeMaterial;
+    divider.position.set(0, 0.16, z);
+    divider.parent = root;
+
+    for (const x of [-landmark.width * 0.28, 0, landmark.width * 0.28]) {
+      const slot = MeshBuilder.CreateBox("parking-slot", { width: 0.24, height: 0.02, depth: 4.6 }, scene);
+      slot.material = stripeMaterial;
+      slot.position.set(x, 0.16, z + 2);
+      slot.parent = root;
+    }
+  }
+
+  const booth = MeshBuilder.CreateBox("parking-booth", { width: 4.4, height: 3.2, depth: 3.6 }, scene);
+  booth.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "facade",
+    "#d8c0a6",
+    { seedX: landmark.x + 5, seedZ: landmark.z + 2 },
+    { textureScale: 2.2, bumpLevel: 0.08, roughness: 0.8, specularPower: 14 },
+  );
+  booth.position.set(-landmark.width * 0.32, 1.7, -landmark.depth * 0.28);
+  booth.parent = root;
+
+  const canopy = MeshBuilder.CreateBox("parking-canopy", { width: 12, height: 0.7, depth: 5.4 }, scene);
+  canopy.material = createSurfaceMaterial(
+    scene,
+    quality,
+    "paintedMetal",
+    "#d0d7df",
+    { seedX: landmark.x + 4, seedZ: landmark.z + 9 },
+    { textureScale: 3.2, bumpLevel: 0.05, roughness: 0.44, metallic: 0.18, specularPower: 28 },
+  );
+  canopy.position.set(landmark.width * 0.18, 3.8, -landmark.depth * 0.3);
+  canopy.parent = root;
+
+  for (const x of [-4.5, 4.5]) {
+    const post = MeshBuilder.CreateBox("parking-post", { width: 0.42, height: 3.2, depth: 0.42 }, scene);
+    post.material = canopy.material;
+    post.position.set(landmark.width * 0.18 + x, 1.6, -landmark.depth * 0.3);
+    post.parent = root;
+  }
+
+  applyShadowSetup(root, shadowGenerator, true);
+}
+
+function createLandmark(scene, quality, shadowGenerator, landmark) {
+  if (landmark.type === "plaza") {
+    createPlaza(scene, quality, shadowGenerator, landmark);
+    return;
+  }
+  if (landmark.type === "gas") {
+    createGasStation(scene, quality, shadowGenerator, landmark);
+    return;
+  }
+  if (landmark.type === "construction") {
+    createConstructionSite(scene, quality, shadowGenerator, landmark);
+    return;
+  }
+  if (landmark.type === "parking") {
+    createParkingLot(scene, quality, shadowGenerator, landmark);
+    return;
+  }
+  createMiniPlaza(scene, quality, shadowGenerator, landmark);
+}
+
 function buildStaticWorld(scene, world, quality, shadowGenerator) {
   setupAtmosphere(scene, world, quality);
   createBackdrop(scene, world, quality);
@@ -1638,6 +2126,10 @@ function buildStaticWorld(scene, world, quality, shadowGenerator) {
 
     addRooftopDetails(scene, quality, shadowGenerator, building);
     addBuildingWindows(scene, quality, building);
+  }
+
+  for (const landmark of world.landmarks ?? []) {
+    createLandmark(scene, quality, shadowGenerator, landmark);
   }
 
   for (const tree of world.trees) {

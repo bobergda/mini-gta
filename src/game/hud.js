@@ -5,6 +5,13 @@ function readTextPath(source, path) {
   return path.split(".").reduce((value, part) => value?.[part], source);
 }
 
+function formatTemplate(template, values = {}) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.replaceAll(`{${key}}`, `${value}`),
+    template,
+  );
+}
+
 function readEventLabel(state, text) {
   const activeEvent = state.run?.districtEvent;
   if (!activeEvent) {
@@ -12,12 +19,57 @@ function readEventLabel(state, text) {
   }
 
   if (activeEvent.type === "highValuePickup") {
-    return `High value pickup | ${Math.ceil(activeEvent.duration)} s`;
+    return formatTemplate(text.hud.eventStates.highValue, {
+      duration: Math.ceil(activeEvent.duration),
+    });
   }
   if (activeEvent.type === "courierRun") {
-    return `Kurier | ${activeEvent.progress.toFixed(1)} / ${activeEvent.required}s`;
+    return formatTemplate(text.hud.eventStates.courier, {
+      progress: activeEvent.progress.toFixed(1),
+      required: activeEvent.required,
+    });
   }
-  return `Hot zone | ${activeEvent.progress.toFixed(1)} / ${activeEvent.required}s`;
+  return formatTemplate(text.hud.eventStates.heat, {
+    progress: activeEvent.progress.toFixed(1),
+    required: activeEvent.required,
+  });
+}
+
+function readEventProgress(state) {
+  const activeEvent = state.run?.districtEvent;
+  if (!activeEvent) {
+    return { progress: 0, label: "Czeka" };
+  }
+
+  if (activeEvent.type === "highValuePickup") {
+    return {
+      progress:
+        activeEvent.initialDuration > 0
+          ? 1 - activeEvent.duration / activeEvent.initialDuration
+          : 0,
+      label: `${Math.max(0, Math.ceil(activeEvent.duration))}s`,
+    };
+  }
+
+  return {
+    progress: activeEvent.required > 0 ? activeEvent.progress / activeEvent.required : 0,
+    label: `${activeEvent.progress.toFixed(1)} / ${activeEvent.required}s`,
+  };
+}
+
+function readPursuitLabel(state, text) {
+  const status = state.pursuit?.status ?? "clear";
+  const base = text.hud.pursuitStates[status] ?? text.hud.pursuitStates.clear;
+  if (status === "search") {
+    return `${base} | ${Math.ceil(state.pursuit.searchTimer)}s`;
+  }
+  return base;
+}
+
+function setMeter(node, value) {
+  if (!node) return;
+  const clamped = Math.max(0, Math.min(1, value));
+  node.style.setProperty("--meter-fill", clamped.toFixed(3));
 }
 
 export function createHud(documentRef) {
@@ -36,6 +88,7 @@ export function createHud(documentRef) {
     wantedLine: documentRef.getElementById("wantedLine"),
     healthLine: documentRef.getElementById("healthLine"),
     recentLine: documentRef.getElementById("recentLine"),
+    pursuitLine: documentRef.getElementById("pursuitLine"),
     districtLine: documentRef.querySelector("[data-district-line]"),
     speedLine: documentRef.querySelector("[data-speed-line]"),
     trafficLine: documentRef.querySelector("[data-traffic-line]"),
@@ -44,6 +97,12 @@ export function createHud(documentRef) {
     scoreLine: documentRef.querySelector("[data-score-line]"),
     targetLine: documentRef.querySelector("[data-target-line]"),
     bonusLine: documentRef.querySelector("[data-bonus-line]"),
+    healthFill: documentRef.getElementById("healthFill"),
+    wantedFill: documentRef.getElementById("wantedFill"),
+    scoreFill: documentRef.getElementById("scoreFill"),
+    eventProgressFill: documentRef.getElementById("eventProgressFill"),
+    scoreProgressLabel: documentRef.getElementById("scoreProgressLabel"),
+    eventProgressLabel: documentRef.getElementById("eventProgressLabel"),
     audioLine: documentRef.getElementById("audioLine"),
     qualityLine: documentRef.getElementById("qualityLine"),
     pauseHint: documentRef.getElementById("pauseHint"),
@@ -124,6 +183,9 @@ export function syncHud(hud, state, telemetry = {}, text = UI_TEXT, options = {}
   hud.wantedLine.textContent = `${text.hud.wantedLabel}: ${stars}`;
   hud.healthLine.textContent = `${text.hud.healthLabel}: ${Math.round(state.player.health)}`;
   hud.recentLine.textContent = `${text.hud.recentLabel}: ${state.feedback.recentEvent || "---"}`;
+  if (hud.pursuitLine) {
+    hud.pursuitLine.textContent = `${text.hud.pursuitLabel}: ${readPursuitLabel(state, text)}`;
+  }
   hud.districtLine.textContent = `${text.hud.districtTitle}: ${state.world.districtName}`;
   hud.speedLine.textContent = `${text.hud.speedLabel}: ${speedKmh} km/h`;
   hud.trafficLine.textContent = `${text.hud.trafficLabel}: ${movingTraffic}`;
@@ -139,6 +201,23 @@ export function syncHud(hud, state, telemetry = {}, text = UI_TEXT, options = {}
   hud.qualityButton.textContent = text.hud.qualityButton;
   hud.pauseHint.textContent = text.hud.pauseHint;
   hud.restartHint.textContent = text.hud.restartHint;
+
+  const eventProgress = readEventProgress(state);
+  setMeter(hud.healthFill, state.player.health / 100);
+  setMeter(hud.wantedFill, state.player.wanted / HUD_CONFIG.maxWantedStars);
+  setMeter(
+    hud.scoreFill,
+    state.run.targetCash > 0 ? state.run.score / state.run.targetCash : 0,
+  );
+  setMeter(hud.eventProgressFill, eventProgress.progress);
+  if (hud.scoreProgressLabel) {
+    const scoreRatio =
+      state.run.targetCash > 0 ? Math.min(1, state.run.score / state.run.targetCash) : 0;
+    hud.scoreProgressLabel.textContent = `${Math.round(scoreRatio * 100)}%`;
+  }
+  if (hud.eventProgressLabel) {
+    hud.eventProgressLabel.textContent = eventProgress.label;
+  }
 
   if (hud.damageFlash) {
     hud.damageFlash.style.setProperty("--damage-alpha", state.feedback.damageFlash.toFixed(3));

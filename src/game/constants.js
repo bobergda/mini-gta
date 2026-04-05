@@ -9,8 +9,8 @@ export const PLAYER_RADIUS = 0.75;
 export const VEHICLE_RADIUS = 2.6;
 export const PICKUP_RADIUS = 1.2;
 
-export const PEDESTRIAN_COUNT = 26;
-export const TRAFFIC_COUNT = 14;
-export const PARKED_COUNT = 8;
-export const PICKUP_COUNT = 12;
-export const MAX_POLICE = 4;
+export const PEDESTRIAN_COUNT = 30;
+export const TRAFFIC_COUNT = 16;
+export const PARKED_COUNT = 10;
+export const PICKUP_COUNT = 14;
+export const MAX_POLICE = 5;

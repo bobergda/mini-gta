@@ -34,7 +34,13 @@ import {
   updatePoliceVehicle,
   updateTrafficVehicle,
 } from "./systems/traffic.js";
-import { addWanted, advanceWanted, desiredPoliceCount } from "./systems/wanted.js";
+import {
+  addWanted,
+  advanceWanted,
+  desiredPoliceCount,
+  updatePursuitState,
+  wantedDecayMultiplier,
+} from "./systems/wanted.js";
 import { findPoliceSpawn, randomSidewalkSpot } from "./world.js";
 
 const COMBAT_CONFIG = {
@@ -141,6 +147,15 @@ function createRunState() {
     targetReached: false,
     districtEvent: null,
     districtEventCooldown: 5,
+  };
+}
+
+function createPursuitState(world) {
+  return {
+    status: "clear",
+    searchTimer: 0,
+    lastKnownX: world.playerSpawn.x,
+    lastKnownZ: world.playerSpawn.z,
   };
 }
 
@@ -353,6 +368,7 @@ export function createGameState(world, rng = Math.random) {
     projectiles: [],
     events: [],
     run: createRunState(),
+    pursuit: createPursuitState(world),
     feedback: {
       damageFlash: 0,
       damageNotice: 0,
@@ -926,13 +942,69 @@ function updateCombat(state, input, cameraController, dt, rng = Math.random) {
   updateProjectiles(state, dt);
 }
 
+function syncPursuitFeedback(state, nextPursuit) {
+  const previousStatus = state.pursuit.status;
+  state.pursuit = nextPursuit;
+
+  if (previousStatus === nextPursuit.status) return;
+
+  if (nextPursuit.status === "locked") {
+    setRecentEvent(state, "Policyjne radio ma kontakt");
+    emitEvent(state, "pursuit_locked");
+    return;
+  }
+
+  if (nextPursuit.status === "search") {
+    setRecentEvent(state, "Kontakt zerwany. Patrol szuka ostatniego sladu");
+    emitEvent(state, "pursuit_search");
+    return;
+  }
+
+  if (nextPursuit.status === "cooling" && previousStatus !== "clear") {
+    setRecentEvent(state, "Skan policyjny slabnie");
+    emitEvent(state, "pursuit_cooling");
+  }
+}
+
 function updatePolicePresence(state, world, dt, rng = Math.random) {
-  advanceWanted(state.player, dt);
-  const desired = desiredPoliceCount(state.player.wanted);
+  const anchor = getPlayerAnchor(state);
   const police = state.vehicles.filter((vehicle) => vehicle.ai === "police");
+  const nextPursuit = updatePursuitState(
+    state.pursuit,
+    state.player.wanted,
+    police,
+    anchor,
+    dt,
+  );
+  syncPursuitFeedback(state, nextPursuit);
+
+  const decayScale = wantedDecayMultiplier(state.pursuit.status);
+  if (decayScale > 0) {
+    advanceWanted(state.player, dt * decayScale);
+  } else {
+    state.player.wantedTimer = Math.max(
+      state.player.wantedTimer,
+      7 + state.player.wanted * 1.8,
+    );
+  }
+
+  const desired = desiredPoliceCount(state.player.wanted);
+  const spawnTarget =
+    state.pursuit.status === "search"
+      ? {
+          ...anchor,
+          x: state.pursuit.lastKnownX,
+          z: state.pursuit.lastKnownZ,
+        }
+      : anchor;
 
   while (police.length < desired) {
-    const spawn = findPoliceSpawn(world, getPlayerAnchor(state), rng);
+    const spawn = findPoliceSpawn(world, spawnTarget, rng, {
+      aggressiveBias:
+        state.pursuit.status === "locked"
+          ? 0.76
+          : 0.22 + Math.min(0.28, state.player.wanted * 0.08),
+    });
     const vehicle = createPoliceVehicle(state.nextId++, world, spawn);
     state.vehicles.push(vehicle);
     police.push(vehicle);
@@ -1004,7 +1076,13 @@ export function updateGameState(state, world, input, cameraController, dt, rng =
     }
   }
 
-  if (state.player.wanted > 0 && state.player.mode === "onfoot") {
-    state.objective = OBJECTIVE_TEXT.onFootWanted;
+  if (state.player.wanted > 0) {
+    if (state.pursuit.status === "search") {
+      state.objective = OBJECTIVE_TEXT.searchWindow;
+    } else if (state.player.mode === "onfoot") {
+      state.objective = OBJECTIVE_TEXT.onFootWanted;
+    } else if (state.pursuit.status === "locked") {
+      state.objective = OBJECTIVE_TEXT.vehicleHot;
+    }
   }
 }

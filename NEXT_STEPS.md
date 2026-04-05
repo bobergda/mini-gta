@@ -2,15 +2,15 @@
 
 ## Progression
 
-- Add simple score targets or district tasks so pickups, escapes, and survival feed into a clearer round structure.
-- Introduce a heat payout that converts wanted-level survival into bonus cash.
+- Add landmark-linked objectives so plaza, gas station, parking lot, and construction yard feed into route planning instead of being just visual anchors.
+- Expand run scoring into chained combos for escapes, near misses, and clean getaway windows after losing police contact.
 
 ## World behavior
 
-- Give pedestrians stronger avoidance near fast-moving vehicles and active police chases.
-- Add traffic lane variety such as rare stops, lane swaps, or light junction pacing so the streets feel less deterministic.
+- Give pedestrians stronger avoidance around gunfire, construction landmarks, and active player vehicles.
+- Add landmark-specific ambient activity: parked vans at the gas station, workers near construction, and civilian clustering on the plaza.
 
 ## Presentation
 
-- Layer in audio cues for sirens, collisions, pickups, and UI hits.
-- Add lightweight pause/restart controls and an end-of-run summary card.
+- Add stronger ambient audio beds per landmark and a fuller police radio layer for the new pursuit phases.
+- Consider a compact minimap or district scanner so the new landmark layout becomes easier to read at speed.

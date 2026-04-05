@@ -52,4 +52,11 @@ describe("world helpers", () => {
     expect(Math.abs(spawn.x) <= world.streetEdge).toBe(true);
     expect(Math.abs(spawn.z) <= world.streetEdge).toBe(true);
   });
+
+  it("builds landmark anchors for the district", () => {
+    const world = createWorld(() => 0.4);
+    expect(world.landmarks.length).toBeGreaterThanOrEqual(3);
+    expect(world.landmarks.some((landmark) => landmark.type === "plaza")).toBe(true);
+    expect(world.landmarks.some((landmark) => landmark.type === "gas")).toBe(true);
+  });
 });

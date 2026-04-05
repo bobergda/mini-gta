@@ -5,6 +5,7 @@ export default defineConfig({
     exclude: ["@babylonjs/core"],
   },
   build: {
+    chunkSizeWarningLimit: 2300,
     modulePreload: {
       resolveDependencies(_filename, deps) {
         return deps.filter((dep) => !dep.includes("babylon-"));
@@ -13,7 +14,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/@babylonjs/core")) return "babylon";
+          if (id.includes("node_modules/@babylonjs/core")) {
+            return "babylon";
+          }
           if (id.includes("node_modules")) return "vendor";
           return undefined;
         },

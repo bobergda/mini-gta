@@ -25,10 +25,12 @@ export function formatRunClock(timeRemaining) {
 }
 
 export function createDistrictEvent(type, overrides = {}) {
+  const duration = overrides.duration ?? RUN_CONFIG.eventDuration;
   return {
     type,
     progress: 0,
-    duration: RUN_CONFIG.eventDuration,
+    duration,
+    initialDuration: duration,
     reward: 0,
     completed: false,
     ...overrides,

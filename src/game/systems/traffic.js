@@ -34,6 +34,8 @@ function createVehicleBase(id, kind, ai, data) {
     slip: 0,
     stuckTimer: 0,
     recoveryCooldown: 0,
+    junctionPause: 0,
+    junctionPausePlan: null,
     ...data,
   };
 }
@@ -58,6 +60,8 @@ export function createTrafficVehicle(id, world, rng = Math.random) {
     targetCoord,
     color: VEHICLE_COLORS[Math.floor(rng() * VEHICLE_COLORS.length)],
     cruiseSpeed: 11.5 + rng() * 3.5,
+    temperament:
+      rng() > 0.74 ? "aggressive" : rng() > 0.34 ? "steady" : "cautious",
   });
 }
 
@@ -159,6 +163,23 @@ function computeTrafficFactor(vehicle, trafficState) {
   return factor;
 }
 
+function planIntersectionPause(vehicle, trafficFactor, rng = Math.random) {
+  if (vehicle.junctionPausePlan !== null) {
+    return vehicle.junctionPausePlan;
+  }
+
+  const baseChance =
+    vehicle.temperament === "cautious"
+      ? 0.42
+      : vehicle.temperament === "steady"
+        ? 0.22
+        : 0.08;
+  const congestionBonus = trafficFactor < 0.82 ? 0.28 : trafficFactor < 0.94 ? 0.12 : 0;
+  const shouldPause = rng() < baseChance + congestionBonus;
+  vehicle.junctionPausePlan = shouldPause ? 0.35 + rng() * 0.95 : 0;
+  return vehicle.junctionPausePlan;
+}
+
 function getVehicleBasis(vehicle) {
   return {
     forward: { x: Math.cos(vehicle.heading), z: Math.sin(vehicle.heading) },
@@ -217,7 +238,21 @@ export function updateTrafficVehicle(vehicle, world, trafficState, dt, rng = Mat
   }
 
   const trafficFactor = computeTrafficFactor(vehicle, trafficState);
-  const targetSpeed = (vehicle.cruiseSpeed ?? 13.5) * trafficFactor;
+  const currentCoord = vehicle.axis === "x" ? vehicle.x : vehicle.z;
+  const remaining = (vehicle.targetCoord - currentCoord) * vehicle.dir;
+  const approachingIntersection = remaining < 15;
+  vehicle.junctionPause = Math.max(0, (vehicle.junctionPause ?? 0) - dt);
+
+  if (approachingIntersection && vehicle.junctionPausePlan === null) {
+    const pause = planIntersectionPause(vehicle, trafficFactor, rng);
+    if (pause > 0) {
+      vehicle.junctionPause = pause;
+      vehicle.junctionPausePlan = 0;
+    }
+  }
+
+  const junctionFactor = vehicle.junctionPause > 0 ? 0.08 : 1;
+  const targetSpeed = (vehicle.cruiseSpeed ?? 13.5) * trafficFactor * junctionFactor;
   vehicle.speed = lerp(vehicle.speed, targetSpeed, dt * (trafficFactor < 0.98 ? 3.1 : 1.2));
   vehicle.heading = headingFromAxis(vehicle.axis, vehicle.dir);
   const velocity = composeVelocity(vehicle.heading, vehicle.speed);
@@ -227,20 +262,24 @@ export function updateTrafficVehicle(vehicle, world, trafficState, dt, rng = Mat
   if (vehicle.axis === "x") {
     vehicle.z = lerp(vehicle.z, vehicle.lineCoord, dt * 7);
     vehicle.x += vehicle.dir * vehicle.speed * dt;
-    const remaining = (vehicle.targetCoord - vehicle.x) * vehicle.dir;
-    if (remaining <= 0) {
+    const nextRemaining = (vehicle.targetCoord - vehicle.x) * vehicle.dir;
+    if (nextRemaining <= 0) {
       vehicle.x = vehicle.targetCoord;
       const route = chooseTrafficTurn(vehicle, world, null, rng);
       setVehicleRoute(vehicle, route);
+      vehicle.junctionPause = 0;
+      vehicle.junctionPausePlan = null;
     }
   } else {
     vehicle.x = lerp(vehicle.x, vehicle.lineCoord, dt * 7);
     vehicle.z += vehicle.dir * vehicle.speed * dt;
-    const remaining = (vehicle.targetCoord - vehicle.z) * vehicle.dir;
-    if (remaining <= 0) {
+    const nextRemaining = (vehicle.targetCoord - vehicle.z) * vehicle.dir;
+    if (nextRemaining <= 0) {
       vehicle.z = vehicle.targetCoord;
       const route = chooseTrafficTurn(vehicle, world, null, rng);
       setVehicleRoute(vehicle, route);
+      vehicle.junctionPause = 0;
+      vehicle.junctionPausePlan = null;
     }
   }
 }

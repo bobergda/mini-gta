@@ -13,6 +13,7 @@
   --danger: #ff9f8c;
   --glow: rgba(255, 165, 84, 0.26);
   --shadow: rgba(0, 0, 0, 0.44);
+  --scanline: rgba(255, 255, 255, 0.03);
 }
 
 * {
@@ -28,7 +29,7 @@ body {
     radial-gradient(circle at 84% 18%, rgba(102, 155, 208, 0.16), transparent 30%),
     linear-gradient(145deg, #090a0d 0%, #14171c 42%, #0c1015 100%);
   color: var(--text);
-  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  font-family: "Avenir Next Condensed", "Franklin Gothic Medium", "Trebuchet MS", sans-serif;
 }
 
 body {
@@ -128,6 +129,24 @@ h1 {
   height: calc(100vh - 150px);
   min-height: calc(100vh - 150px);
   background: linear-gradient(180deg, rgba(12, 15, 18, 0.34), rgba(12, 15, 18, 0.12));
+}
+
+.game-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.16), transparent 18%, transparent 84%, rgba(0, 0, 0, 0.2)),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0,
+      transparent 8px,
+      var(--scanline) 9px,
+      transparent 10px
+    );
+  mix-blend-mode: soft-light;
 }
 
 .game-root,
@@ -329,11 +348,94 @@ h1 {
   margin-top: 8px;
 }
 
+.progress-unit {
+  margin-top: 14px;
+}
+
+.progress-copy,
+.meter-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-copy {
+  margin-bottom: 8px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.progress-copy strong {
+  color: var(--accent-2);
+  letter-spacing: 0.05em;
+}
+
+.meter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.meter-card span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.meter-bar {
+  position: relative;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(4, 5, 7, 0.4);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.meter-fill {
+  --meter-fill: 0;
+  position: absolute;
+  inset: 0;
+  width: calc(var(--meter-fill) * 100%);
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.34), transparent 28%),
+    linear-gradient(90deg, #ffcc85, #ef8a41);
+  box-shadow: 0 0 16px rgba(239, 138, 65, 0.26);
+  transition: width 180ms ease;
+}
+
+.meter-cool .meter-fill {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.3), transparent 30%),
+    linear-gradient(90deg, #89b3ff, #4d81ff);
+  box-shadow: 0 0 16px rgba(77, 129, 255, 0.22);
+}
+
+.meter-accent .meter-fill,
+.meter-warm .meter-fill {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.34), transparent 28%),
+    linear-gradient(90deg, #ffd59a, #ee8d3f);
+}
+
 #objective {
   line-height: 1.5;
 }
 
 #eventLine,
+#pursuitLine,
 #recentLine,
 #pauseHint,
 #restartHint {
@@ -353,6 +455,10 @@ h1 {
 
 .telemetry p {
   justify-content: flex-start;
+}
+
+.telemetry-progress {
+  margin-top: 14px;
 }
 
 .controls-card {
@@ -411,6 +517,10 @@ h1 {
 
   .card {
     flex: 1 1 0;
+  }
+
+  .meter-grid {
+    grid-template-columns: 1fr;
   }
 }
 
