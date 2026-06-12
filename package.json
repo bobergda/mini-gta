@@ -13,7 +13,7 @@
     "@babylonjs/core": "^8.33.4"
   },
   "devDependencies": {
-    "vite": "^7.1.10",
-    "vitest": "^3.2.4"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   }
 }
